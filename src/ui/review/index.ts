@@ -294,9 +294,9 @@ export class ReviewModal extends Modal {
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
             () => this.handleAgain(item));
         this.addResponseButton(actionsEl, 2, "Okay", "ef-btn-okay", "activity", okayInterval,
-            () => this.handleScheduledResponse(ReviewResponse.Hard, item));
+            () => { void this.handleScheduledResponse(ReviewResponse.Hard, item); });
         this.addResponseButton(actionsEl, 3, "Good", "ef-btn-good", "check", goodInterval,
-            () => this.handleScheduledResponse(ReviewResponse.Good, item));
+            () => { void this.handleScheduledResponse(ReviewResponse.Good, item); });
     }
 
     private renderPostAgainButtons(actionsEl: HTMLElement, item: ReviewItem): void {
@@ -305,7 +305,7 @@ export class ReviewModal extends Modal {
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
             () => this.handleAgain(item));
         this.addResponseButton(actionsEl, 2, "OK", "ef-btn-good", "check", showInterval ? "1d" : null,
-            () => this.handleReset(item));
+            () => { void this.handleReset(item); });
     }
 
     private renderCramButtons(actionsEl: HTMLElement, item: ReviewItem): void {

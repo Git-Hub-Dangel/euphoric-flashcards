@@ -25,7 +25,7 @@ export class EditCardModal extends Modal {
 
         const textarea = this.contentEl.createEl("textarea", {
             cls: "ef-edit-textarea",
-        }) as HTMLTextAreaElement;
+        });
         textarea.value = this.opts.initialText;
         textarea.rows = Math.min(20, Math.max(4, this.opts.initialText.split("\n").length + 1));
 
@@ -36,22 +36,24 @@ export class EditCardModal extends Modal {
         const saveBtn = actions.createEl("button", { text: "Save", cls: "ef-btn ef-btn-primary" });
 
         cancelBtn.addEventListener("click", () => this.close());
-        saveBtn.addEventListener("click", async () => {
-            saveBtn.disabled = true;
-            cancelBtn.disabled = true;
-            errorEl.addClass("ef-hidden");
-            const err = await this.opts.onSave(textarea.value);
-            if (err === null) {
-                this.close();
-                return;
-            }
-            errorEl.setText(err);
-            errorEl.removeClass("ef-hidden");
-            saveBtn.disabled = false;
-            cancelBtn.disabled = false;
+        saveBtn.addEventListener("click", () => {
+            void (async (): Promise<void> => {
+                saveBtn.disabled = true;
+                cancelBtn.disabled = true;
+                errorEl.addClass("ef-hidden");
+                const err = await this.opts.onSave(textarea.value);
+                if (err === null) {
+                    this.close();
+                    return;
+                }
+                errorEl.setText(err);
+                errorEl.removeClass("ef-hidden");
+                saveBtn.disabled = false;
+                cancelBtn.disabled = false;
+            })();
         });
 
-        setTimeout(() => textarea.focus(), 0);
+        window.setTimeout(() => textarea.focus(), 0);
     }
 
     onClose(): void {

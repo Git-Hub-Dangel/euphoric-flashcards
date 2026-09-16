@@ -1,4 +1,9 @@
-import moment, { Moment } from "moment";
+import { moment as obsidianMoment } from "obsidian";
+import type { Moment } from "moment";
+
+// obsidian re-exports moment as `typeof * as moment` (a namespace), which
+// omits the callable signature. re-cast to the callable default export.
+const moment = obsidianMoment as unknown as typeof import("moment");
 
 import { ALLOWED_DATE_FORMATS, PREFERRED_DATE_FORMAT } from "src/scheduling/constants";
 

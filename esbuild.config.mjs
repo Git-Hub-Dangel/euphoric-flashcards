@@ -11,6 +11,9 @@ mkdirSync(OUT_DIR, { recursive: true });
 const copyStaticAssets = () => {
     copyFileSync("manifest.json", `${OUT_DIR}/manifest.json`);
     copyFileSync("styles.css", `${OUT_DIR}/styles.css`);
+    // Also mirror main.js to the repo root so the marketplace linter (which
+    // expects main.js at ., dist/, build/, or out/) can find it.
+    copyFileSync(`${OUT_DIR}/main.js`, "main.js");
 };
 
 const context = await esbuild.context({

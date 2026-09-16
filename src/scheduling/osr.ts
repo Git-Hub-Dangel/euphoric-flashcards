@@ -1,4 +1,4 @@
-import { Moment } from "moment";
+import type { Moment } from "moment";
 
 import { DUMMY_DUE_DATE_FOR_NEW_CARD, PREFERRED_DATE_FORMAT, TICKS_PER_DAY } from "src/scheduling/constants";
 import { DateUtil, formatDate, globalDateProvider } from "src/scheduling/dates";

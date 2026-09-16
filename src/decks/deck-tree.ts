@@ -1,5 +1,4 @@
 import { parseScheduleComment } from "src/persistence/comment-parser";
-import { DUMMY_DUE_DATE_FOR_NEW_CARD } from "src/scheduling/constants";
 
 export interface CardLocation {
     filePath: string;

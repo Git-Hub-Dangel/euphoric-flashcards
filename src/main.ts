@@ -34,29 +34,31 @@ export default class EuphoricFlashcardsPlugin extends Plugin {
     data: PluginData = DEFAULT_DATA;
     histogramStore!: HistogramStore;
 
-    async onload(): Promise<void> {
-        await this.loadData_();
+    onload(): void {
+        void (async (): Promise<void> => {
+            await this.loadData_();
 
-        this.histogramStore = new HistogramStore(this.data.histogram);
+            this.histogramStore = new HistogramStore(this.data.histogram);
 
-        this.addSettingTab(new EuphoricSettingsTab(this.app, this));
+            this.addSettingTab(new EuphoricSettingsTab(this.app, this));
 
-        this.addCommand({
-            id: "open-explorer",
-            name: "Review",
-            callback: () => {
-                new ExplorerModal(this.app, this).open();
-            },
-        });
+            this.addCommand({
+                id: "open-explorer",
+                name: "Review",
+                callback: () => {
+                    new ExplorerModal(this.app, this).open();
+                },
+            });
 
-        // background build if the histogram is empty or older than a day.
-        // failure is non-fatal — the algorithm falls through when the
-        // histogram is empty.
-        if (this.data.settings.loadBalance && this.histogramNeedsRebuild()) {
-            this.histogramStore.rebuild(this.app.vault)
-                .then(() => this.saveData_())
-                .catch(err => console.error("EuphoricFlashcards: histogram build failed", err));
-        }
+            // background build if the histogram is empty or older than a day.
+            // failure is non-fatal — the algorithm falls through when the
+            // histogram is empty.
+            if (this.data.settings.loadBalance && this.histogramNeedsRebuild()) {
+                this.histogramStore.rebuild(this.app.vault)
+                    .then(() => this.saveData_())
+                    .catch(err => console.error("EuphoricFlashcards: histogram build failed", err));
+            }
+        })();
     }
 
     private histogramNeedsRebuild(): boolean {

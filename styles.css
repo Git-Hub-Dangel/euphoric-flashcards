@@ -51,7 +51,7 @@
 }
 
 .modal.ef-modal-fullscreen .modal-close-button,
-.modal.ef-modal-fullscreen .modal-header-button { display: none !important; }
+.modal.ef-modal-fullscreen .modal-header-button { display: none; }
 
 /* Fullscreen modal */
 .modal.ef-modal-fullscreen {
@@ -82,7 +82,7 @@
 }
 
 /* ── Utility ─────────────────────────────────────────────── */
-.ef-hidden { display: none !important; }
+.ef-hidden.ef-hidden { display: none; }
 .ef-loading { padding: 20px; color: var(--text-muted); }
 .ef-muted   { color: var(--text-muted); }
 
@@ -689,3 +689,10 @@
         padding-bottom: calc(40px + env(safe-area-inset-bottom));
     }
 }
+
+/* ── Settings tab helpers ────────────────────────────────── */
+.ef-ct-key-input { width: 60px; }
+.ef-ct-label-input { width: 100px; }
+.ef-ct-row { border-bottom: none; }
+.ef-ct-row .setting-item-info { display: none; }
+.ef-slider-number-input { width: 72px; }

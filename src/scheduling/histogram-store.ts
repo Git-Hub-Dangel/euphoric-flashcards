@@ -1,5 +1,5 @@
 import type { Vault } from "obsidian";
-import { Moment } from "moment";
+import type { Moment } from "moment";
 
 import { DueDateHistogram } from "src/scheduling/due-date-histogram";
 import { parseScheduleComment } from "src/persistence/comment-parser";
