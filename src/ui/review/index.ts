@@ -13,7 +13,7 @@ import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
 import { loadCardsForDeck, writeCardBack, ReviewCard } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { preventBgTapDismiss } from "src/ui/modal-utils";
+import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
 import { EditCardModal } from "src/ui/edit-card/index";
 
 // ---------------------------------------------------------------------------
@@ -141,6 +141,7 @@ export class ReviewModal extends Modal {
     onOpen(): void {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
+        addCloseButton(this);
         this.contentEl.addClass("ef-review");
         this.addBackButton();
         this.contentEl.createEl("p", { text: "Loading cards…", cls: "ef-loading" });

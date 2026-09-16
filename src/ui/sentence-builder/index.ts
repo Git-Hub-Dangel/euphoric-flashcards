@@ -8,7 +8,7 @@ import { frontFace, backFace, cardReveal } from "src/parsing";
 import type { ParsedCard } from "src/parsing";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { preventBgTapDismiss } from "src/ui/modal-utils";
+import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
 
 export interface SentenceBuilderOptions {
     cardSide: CardSide;
@@ -51,6 +51,7 @@ export class SentenceBuilderModal extends Modal {
     onOpen(): void {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
+        addCloseButton(this);
         this.contentEl.addClass("ef-sentence-builder");
         this.addBackButton();
         this.contentEl.createEl("p", { text: "Loading…", cls: "ef-loading" });

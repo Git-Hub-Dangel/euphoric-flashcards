@@ -4,7 +4,7 @@ import { buildDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { ReviewModal } from "src/ui/review/index";
 import { SentenceBuilderModal } from "src/ui/sentence-builder/index";
-import { preventBgTapDismiss } from "src/ui/modal-utils";
+import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
 import type { CardSide, WordSelection, ReviewMode } from "src/settings";
 
 export class ExplorerModal extends Modal {
@@ -53,6 +53,7 @@ export class ExplorerModal extends Modal {
     onOpen(): void {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
+        addCloseButton(this);
         this.contentEl.addClass("ef-explorer");
         this.contentEl.createEl("p", { text: "Loading decks…", cls: "ef-loading" });
         this.load().catch(err => {

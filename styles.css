@@ -25,6 +25,34 @@
     color: var(--text-normal);
 }
 
+/* Custom close button — mirrors ef-back-btn on the right. We render our own
+   because obsidian's native `.modal-close-button` slides under the iOS notch
+   on fullscreen modals and its position is hard to override reliably. */
+.ef-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    z-index: 10;
+}
+.ef-close-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.modal.ef-modal-fullscreen .modal-close-button,
+.modal.ef-modal-fullscreen .modal-header-button { display: none !important; }
+
 /* Fullscreen modal */
 .modal.ef-modal-fullscreen {
     width: 90vw;
@@ -636,3 +664,28 @@
 }
 .ef-done h2  { margin: 0; font-size: 1.6em; }
 .ef-done-sub { color: var(--text-muted); margin: 0; }
+
+/* ── iOS safe-area (notch + home indicator) ──────────────── */
+/* Fullscreen modals cover the whole viewport on mobile, so headers slide
+   under the notch and footer buttons hug the home-indicator rounded corner.
+   Push top chrome down by the inset, and lift bottom buttons a touch above
+   the inset so they breathe against the phone's screen radius. */
+@media (max-width: 600px) {
+    .modal.ef-modal-fullscreen .ef-back-btn,
+    .modal.ef-modal-fullscreen .ef-close-btn {
+        top: calc(10px + env(safe-area-inset-top));
+    }
+    .modal.ef-modal-fullscreen .ef-explorer-header,
+    .modal.ef-modal-fullscreen .ef-review-header,
+    .modal.ef-modal-fullscreen .ef-sb-header {
+        padding-top: calc(12px + env(safe-area-inset-top));
+    }
+    .modal.ef-modal-fullscreen .ef-review-actions,
+    .modal.ef-modal-fullscreen .ef-sb-footer {
+        padding-bottom: calc(18px + env(safe-area-inset-bottom));
+    }
+    .modal.ef-modal-fullscreen .ef-done {
+        padding-top: calc(40px + env(safe-area-inset-top));
+        padding-bottom: calc(40px + env(safe-area-inset-bottom));
+    }
+}

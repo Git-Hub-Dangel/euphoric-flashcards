@@ -12,19 +12,17 @@ First of all, Cześć! I'm Daniel. I speak seven languages, 5 of 'em fluently, 1
 
 This plugin, instead of solely being a mundane repository for your vocabulary, forms the backbone of your learning and unifies raw input and grammatical concepts in a feature suite that gives you the leverage to understand, explain, and apply (not simply memorize) your words. At its core it's still a flashcard plugin. But one, that dynamically adjusts to your distinct type of note taking, and interacts with you by letting you form sentences or explain contents. Of course, this plugin is just a part of [a small coherent system](https://www.jrdk.de/notes/linguistic-learning-system).
 
-*Euphoric Flashcards* improves spaced-repetition with
-- A flexibe dynamic syntax that supports not only the capture of words, but optionally:
-    - Declarations of configurable word-types (noun, adj, own types)
-    - Embedded usage examples and sentences
-    - A field to add details, explanations about the flashcard
-    - Support for transliterated words of glyphic languages or pronounciations i.e. `汉语 - hànyǔ - Chinese `
-- Native two-way card reviews
-- The **Setence Builder** review mode, that lets you use your flashcards to practice forming deliberate sentences
-- The OSR spaced-repetition scheduling algorithm with load balancing
+Euphoric Flashcards refines spaced repetition with features I found missing from every other open-source flashcard plugin I've used:
+* A flexible, dynamic syntax that captures more than just words:
+   * Configurable word-type declarations (noun, adj, or custom types)
+   * Embedded usage examples and sentences
+   * A field for notes and explanations
+   * Support for transliterations of glyphic languages or pronunciations, e.g. `汉语 - hànyǔ - Chinese`
+* Native two-way card reviews
+* A Sentence Builder review mode, for practicing deliberate sentence construction with your own flashcards
+* The FSRS spaced-repetition algorithm with load balancing
 
-A preview on syntax and UI
-<video src="assets/video/demo-video.mp4" controls width="100%"></video>
-
+[This is a preview video demonstrating the syntax and UI](https://www.jrdk.de/notes/euphoric-flashcards#syntax-reference-video) 
 ## 🧭 Where to?
 - If you're new to flashcards in Obsidian, I recommend you follow the [Quick Start Guide](#-quick-start-and-featureset) which happens to also be the full guide on the plugin. Takes at most about 10 minutes and introduces you cohesively to everything *Euphoric Flashcards* has to offer.
 - Are you transitioning from another flashcard plugin such as [OSR](https://github.com/st3v3nmw/obsidian-spaced-repetition)? *Euphoric Flashcards* is designed to be compatible with the scheduling- and card syntax of OSR with the only difference being that we use the symbols `-`, `:`, `=`, as unchangeable functional operators here. Therefore words/flashcards containing them as part of the content might cause the parser to interpret them incorrectly. I recommend you to refactor your flashcard notes to match the [syntax pattern](#1-card-syntax) by either manual means, or using the quick help of AI. You might then also skim over the [Quick Start Guide](#-quick-start-and-featureset) to make sure nothing surprises you.
