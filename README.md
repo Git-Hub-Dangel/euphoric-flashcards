@@ -12,7 +12,7 @@ First of all, Cześć! I'm Daniel. I speak seven languages, 5 of 'em fluently, 1
 
 This plugin, instead of solely being a mundane repository for your vocabulary, forms the backbone of your learning and unifies raw input and grammatical concepts in a feature suite that gives you the leverage to understand, explain, and apply (not simply memorize) your words. At its core it's still a flashcard plugin. But one, that dynamically adjusts to your distinct type of note taking, and interacts with you by letting you form sentences or explain contents. Of course, this plugin is just a part of [a small coherent system](https://www.jrdk.de/notes/linguistic-learning-system).
 
-Euphoric Flashcards refines spaced repetition with features I found missing from every other open-source flashcard plugin I've used:
+Euphoric Flashcards refines spaced repetition with features I found missing, or opened PRs on from every other open-source flashcard app or plugin I've used:
 * A flexible, dynamic syntax that captures more than just words:
    * Configurable word-type declarations (noun, adj, or custom types)
    * Embedded usage examples and sentences
@@ -20,7 +20,7 @@ Euphoric Flashcards refines spaced repetition with features I found missing from
    * Support for transliterations of glyphic languages or pronunciations, e.g. `汉语 - hànyǔ - Chinese`
 * Native two-way card reviews
 * A Sentence Builder review mode, for practicing deliberate sentence construction with your own flashcards
-* The FSRS spaced-repetition algorithm with load balancing
+* An Anki-like spaced-repetition algorithm with load balancing
 
 [This is a preview video demonstrating the syntax and UI](https://www.jrdk.de/notes/euphoric-flashcards#syntax-reference-video) 
 ## 🧭 Where to?
