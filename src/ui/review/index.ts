@@ -111,6 +111,7 @@ export class ReviewModal extends Modal {
 
     private queue: ReviewItem[] = [];
     private idx = 0;
+    private totalCards = 0;
     private revealed = false;
     private reviewed = 0;
     private fileCache = new Map<string, string>();
@@ -180,6 +181,7 @@ export class ReviewModal extends Modal {
             cards, this.mode, this.cardSide,
             globalDateProvider.today.toDate(),
         );
+        this.totalCards = this.queue.length;
         this.contentEl.empty();
         this.queue.length === 0 ? this.renderEmpty() : this.renderCard();
     }
@@ -210,7 +212,7 @@ export class ReviewModal extends Modal {
             const editBtn = right.createEl("button", { cls: "ef-edit-btn", attr: { "aria-label": "Edit card" } });
             setIcon(editBtn, "pencil");
             editBtn.addEventListener("click", () => this.openEditCardModal(item));
-            right.createEl("span", { text: `${this.idx + 1} / ${this.queue.length}`, cls: "ef-review-progress" });
+            right.createEl("span", { text: `${this.reviewed} / ${this.totalCards - this.reviewed}`, cls: "ef-review-progress" });
         });
 
         // Card body

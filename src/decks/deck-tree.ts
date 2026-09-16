@@ -3,7 +3,7 @@ import { DUMMY_DUE_DATE_FOR_NEW_CARD } from "src/scheduling/constants";
 
 export interface CardLocation {
     filePath: string;
-    lineIndex: number;   // 0-based line index in the file
+    lineIndex: number;   // 0 based line index in the file
     deckTag: string;     // full tag that owns this card, e.g. "#español/palabras"
 }
 
@@ -15,7 +15,7 @@ export interface DeckStats {
 
 export interface DeckNode {
     name: string;        // leaf segment, e.g. "palabras"
-    fullPath: string;    // slash-joined from root, e.g. "español/palabras"
+    fullPath: string;    // slash joined from root, e.g. "español/palabras"
     tag: string;         // canonical tag form, e.g. "#español/palabras"
     stats: DeckStats;
     cards: CardLocation[];
@@ -32,9 +32,7 @@ export interface BuildDeckTreeOptions {
     today: Date;
 }
 
-// -----------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------
+// helpers
 
 const TAG_RE = /#([\wÀ-ɏ-]+(?:\/[\wÀ-ɏ-]+)*)/gu;
 const SR_COMMENT_RE = /<!--SR:!.+?-->/;
@@ -65,7 +63,7 @@ function normalise(tag: string): string {
     return tag.toLowerCase();
 }
 
-// Returns the matching root tag (normalised) if `tag` belongs under any root.
+// returns the matching root tag (normalised) if `tag` belongs under any root
 function findRoot(tag: string, normalisedRoots: string[]): string | null {
     const n = normalise(tag);
     for (const root of normalisedRoots) {
@@ -81,30 +79,30 @@ function segmentsOf(tag: string): string[] {
 function isSkippableLine(line: string): boolean {
     const t = line.trim();
     if (!t) return true;
-    // Bare SR-comment line (dedicated schedule line, not a card of its own)
+    // bare SR comment line (dedicated schedule line, not a card of its own)
     if (SR_ONLY_LINE_RE.test(line)) return true;
-    // Pure tag lines
+    // pure tag lines
     if (/^(#[\wÀ-ɏ-]+(?:\/[\wÀ-ɏ-]+)*\s*)+$/.test(t)) return true;
-    // Markdown headings
+    // markdown headings
     if (/^#{1,6}\s/.test(t)) return true;
-    // Code fences, horizontal rules
+    // code fences and horizontal rules
     if (/^(```|~~~|---+|===+|\*\*\*+)/.test(t)) return true;
     return false;
 }
 
-// Returns true if a card line has *no* SR schedule comment (i.e. it's new).
+// returns true if the line has no SR schedule comment (so it's new)
 function lineIsNew(line: string): boolean {
     return !SR_COMMENT_RE.test(line);
 }
 
-// Returns true if a card has a schedule comment and at least one side is due.
+// returns true if the line has a schedule comment with at least one side due
 function lineIsDue(line: string, todayMidnight: number): boolean {
     const m = SR_COMMENT_RE.exec(line);
     if (!m) return false;
     const schedules = parseScheduleComment(m[0]);
     for (const s of schedules) {
         if (s === null) {
-            // This side is "new" per dummy date — treat as not due but not truly new either.
+            // this side is "new" per dummy date, so treat as not due but not truly new either
             continue;
         }
         if (s.dueDate.valueOf() <= todayMidnight) return true;
@@ -112,9 +110,7 @@ function lineIsDue(line: string, todayMidnight: number): boolean {
     return false;
 }
 
-// -----------------------------------------------------------------------
-// Tree construction
-// -----------------------------------------------------------------------
+// tree construction
 
 function ensureNode(root: DeckNode, tag: string, rootNorm: string): DeckNode {
     const rootSegs = segmentsOf(rootNorm);       // ["español"]
@@ -148,7 +144,7 @@ function processFile(
         const line = file.lines[i] ?? "";
         const tags = extractTags(line);
 
-        // Check for a recognised deck tag on this line — last one wins.
+        // check for a recognised deck tag on this line — last one wins
         let foundDeckTag = false;
         for (const tag of tags) {
             const root = findRoot(tag, normalisedRoots);
@@ -167,8 +163,8 @@ function processFile(
         node.cards.push({ filePath: file.path, lineIndex: i, deckTag: activeDeckTag });
         node.stats.total++;
 
-        // SR may live inline on the same text line (legacy) or on the very next
-        // bare line (current write format). Peek at both.
+        // SR may live inline on the same text line (legacy) or on the bare line
+        // immediately after (current format). peek at both.
         const nextLine = file.lines[i + 1] ?? "";
         const srBearingLine = SR_COMMENT_RE.test(line)
             ? line
@@ -197,9 +193,7 @@ function bubbleStats(node: DeckNode): DeckStats {
     return node.stats;
 }
 
-// -----------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------
+// public API
 
 export function buildDeckTree(
     files: FileLines[],

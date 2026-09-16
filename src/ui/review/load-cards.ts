@@ -87,8 +87,8 @@ export async function loadCardsForDeck(
     return results;
 }
 
-// Write updated raw lines back to a file, using an in-session cache so
-// multiple writes to the same file within one review session stay consistent.
+// write updated raw lines back to a file, using an in-session cache so
+// multiple writes to the same file within one review session stay consistent
 export async function writeCardBack(
     vault: Vault,
     fileCache: Map<string, string>,

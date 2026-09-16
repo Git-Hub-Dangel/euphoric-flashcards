@@ -10,7 +10,7 @@ import type { CardSide, WordSelection, ReviewMode } from "src/settings";
 export class ExplorerModal extends Modal {
     private readonly plugin: EuphoricFlashcardsPlugin;
 
-    // Explorer UI state — persisted via PluginData.explorerState
+    // Explorer UI state persisted via PluginData.explorerState
     private mode: ReviewMode;
     private cardSide: CardSide;
     private cramSide: CardSide;
@@ -101,7 +101,7 @@ export class ExplorerModal extends Modal {
             const titleEl = h.createEl("div", { cls: "ef-explorer-title" });
             const iconEl = titleEl.createEl("span", { cls: "ef-explorer-icon" });
             setIcon(iconEl, "layers");
-            titleEl.createEl("span", { text: "Explorer" });
+            titleEl.createEl("span", { text: "Review" });
         });
 
         // ── Review Settings ──────────────────────────────────────────────────

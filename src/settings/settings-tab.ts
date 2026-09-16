@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting, ButtonComponent } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { TypeConfig } from "src/settings/index";
+import { DEFAULT_SETTINGS } from "src/settings/index";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
     private readonly plugin: EuphoricFlashcardsPlugin;
@@ -27,7 +28,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         );
     }
 
-    // ── Decks ──────────────────────────────────────────────────────────────
+    // decks
 
     private renderDecks(el: HTMLElement): void {
         el.createEl("h2", { text: "Decks" });
@@ -49,10 +50,27 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             });
     }
 
-    // ── Scheduling ─────────────────────────────────────────────────────────
+    // scheduling
 
     private renderScheduling(el: HTMLElement): void {
         el.createEl("h2", { text: "Scheduling" });
+
+        new Setting(el)
+            .addButton((btn: ButtonComponent) => {
+                btn.setButtonText("Restore Default Settings").onClick(() => {
+                    const d = DEFAULT_SETTINGS;
+                    const s = this.plugin.data.settings;
+                    s.baseEase = d.baseEase;
+                    s.easyBonus = d.easyBonus;
+                    s.lapsesIntervalChange = d.lapsesIntervalChange;
+                    s.maximumInterval = d.maximumInterval;
+                    s.maxLinkFactor = d.maxLinkFactor;
+                    s.loadBalance = d.loadBalance;
+                    s.startOfDay = d.startOfDay;
+                    this.save();
+                    this.display();
+                });
+            });
 
         this.addSliderNumber(el, "Base ease (%)", "Starting ease factor for new cards.", 130, 400, 10,
             () => this.plugin.data.settings.baseEase,
@@ -98,7 +116,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             });
     }
 
-    // ── Card types ─────────────────────────────────────────────────────────
+    // card types
 
     private renderCardTypes(el: HTMLElement): void {
         el.createEl("h2", { text: "Card types" });
@@ -170,24 +188,10 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         setting.descEl.style.display = "none";
     }
 
-    // ── Review ─────────────────────────────────────────────────────────────
+    // review
 
     private renderReview(el: HTMLElement): void {
         el.createEl("h2", { text: "Review" });
-
-        new Setting(el)
-            .setName("Default card side")
-            .setDesc("Which side to prompt first when starting a review session.")
-            .addDropdown(drop => {
-                drop.addOption("Front", "Front");
-                drop.addOption("Back", "Back");
-                drop.addOption("Shuffle", "Shuffle");
-                drop.setValue(this.plugin.data.settings.defaultCardSide);
-                drop.onChange(v => {
-                    this.plugin.data.settings.defaultCardSide = v as "Front" | "Back" | "Shuffle";
-                    this.save();
-                });
-            });
 
         new Setting(el)
             .setName("Show interval on buttons")
@@ -201,24 +205,10 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             });
     }
 
-    // ── Sentence Builder ───────────────────────────────────────────────────
+    // sentence builder
 
     private renderSentenceBuilder(el: HTMLElement): void {
         el.createEl("h2", { text: "Sentence Builder" });
-
-        new Setting(el)
-            .setName("Default card side")
-            .setDesc("Which side of each card to display as the word prompt.")
-            .addDropdown(drop => {
-                drop.addOption("Front", "Front");
-                drop.addOption("Back", "Back");
-                drop.addOption("Shuffle", "Shuffle");
-                drop.setValue(this.plugin.data.settings.defaultSentenceBuilderSide);
-                drop.onChange(v => {
-                    this.plugin.data.settings.defaultSentenceBuilderSide = v as "Front" | "Back" | "Shuffle";
-                    this.save();
-                });
-            });
 
         new Setting(el)
             .setName("Word count")
@@ -247,7 +237,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             });
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // helpers
 
     private addSliderNumber(
         el: HTMLElement,
@@ -259,6 +249,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         get: () => number,
         set: (v: number) => void,
     ): void {
+        let sliderEl: HTMLInputElement | null = null;
+        let textEl: HTMLInputElement | null = null;
         new Setting(el)
             .setName(name)
             .setDesc(desc)
@@ -266,15 +258,25 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 slider.setLimits(min, max, step);
                 slider.setValue(get());
                 slider.setDynamicTooltip();
-                slider.onChange(v => { set(v); this.save(); });
+                sliderEl = slider.sliderEl;
+                slider.onChange(v => {
+                    set(v);
+                    if (textEl) textEl.value = String(v);
+                    this.save();
+                });
             })
             .addText(text => {
+                textEl = text.inputEl;
                 text.setValue(String(get()));
                 text.inputEl.type = "number";
                 text.inputEl.style.width = "72px";
                 text.onChange(v => {
                     const n = parseFloat(v);
-                    if (!isNaN(n) && n >= min && n <= max) { set(n); this.save(); }
+                    if (!isNaN(n) && n >= min && n <= max) {
+                        set(n);
+                        if (sliderEl) sliderEl.value = String(n);
+                        this.save();
+                    }
                 });
             });
     }

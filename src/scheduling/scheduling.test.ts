@@ -172,11 +172,13 @@ describe("SRAlgorithmOsr — card scheduling", () => {
         setupStaticDateProvider("2023-09-06");
     });
 
-    it("cardGetResetSchedule returns interval=1, ease=baseEase", () => {
+    it("cardGetResetSchedule returns interval=1, ease=baseEase, due 1 day out", () => {
         const algo = new SRAlgorithmOsr(DEFAULT_SETTINGS);
         const result = algo.cardGetResetSchedule();
         expect(result.interval).toBe(1);
         expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
+        expect(result.dueDate.format("YYYY-MM-DD")).toBe("2023-09-07");
+        expect(result.isDue()).toBe(false);
     });
 
     it("cardGetNewSchedule Good → non-zero interval, ease = baseEase", () => {

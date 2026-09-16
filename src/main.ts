@@ -37,7 +37,7 @@ export default class EuphoricFlashcardsPlugin extends Plugin {
 
         this.addCommand({
             id: "open-explorer",
-            name: "Open Explorer",
+            name: "Review",
             callback: () => {
                 new ExplorerModal(this.app, this).open();
             },

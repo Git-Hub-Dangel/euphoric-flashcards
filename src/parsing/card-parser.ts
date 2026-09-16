@@ -1,24 +1,22 @@
 import { buildScheduleComment, parseScheduleComment } from "src/persistence/comment-parser";
 import type { ScheduleInfo } from "src/persistence/comment-parser";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// types
 
 export interface CardFields {
     word: string;
     explanation: string | null;
     examples: string[];
-    type: string | null;      // key from settings.cardTypes, or null
+    type: string | null;      // key from settings.cardTypes, or null (no type set)
     translation: string;
 }
 
 export interface ParsedCard {
     fields: CardFields;
-    // Positional: [Front schedule, Back schedule]. null = new (not yet reviewed).
+    // positional: [front schedule, back schedule]. null means not yet reviewed.
     schedules: [ScheduleInfo | null, ScheduleInfo | null];
-    startLine: number;        // 0-based line index of first line of card in source
-    endLine: number;          // 0-based line index of last line (inclusive)
+    startLine: number;        // 0 based line index of first line in source
+    endLine: number;          // 0 based line index of last line (inclusive)
     rawLines: string[];       // raw source lines the card occupies
     originalComment: string | null;   // SR comment found on the last line, or null
 }
@@ -38,25 +36,22 @@ export interface CardReveal {
     type: string | null;
 }
 
-// ---------------------------------------------------------------------------
-// Card boundary detection
-// ---------------------------------------------------------------------------
+// card boundary detection
 
 const SR_COMMENT_ANYWHERE_RE = /<!--SR:!.+?-->/;
 const SR_COMMENT_TRAILING_RE = /\s*<!--SR:!.+?-->\s*$/;
 const SR_ONLY_LINE_RE = /^\s*<!--SR:!.+?-->\s*$/;
 
-// A line "continues" the current card if — after stripping any trailing SR
-// comment — its last non-whitespace characters are "--" or "::".
+// a line continues the current card if, after stripping any trailing SR
+// comment, its last non-whitespace characters are "--" or "::".
 function hasContinuationMarker(line: string): boolean {
     const withoutSR = line.replace(SR_COMMENT_TRAILING_RE, "");
     const trimmed = withoutSR.trimEnd();
     return trimmed.endsWith("--") || trimmed.endsWith("::");
 }
 
-// A bare SR-comment line immediately following the last text line is treated
-// as part of the card. This is the new preferred write format; legacy files
-// with an inline SR on the last text line still work.
+// a bare SR comment line immediately following the last text line is part of
+// the card. this is the preferred write format; legacy inline SR still works.
 function isBareSRLine(line: string | undefined): boolean {
     return line !== undefined && SR_ONLY_LINE_RE.test(line);
 }
@@ -73,7 +68,7 @@ function collectCardLines(
         if (!hasContinuationMarker(line)) break;
         i++;
     }
-    // Include a following bare-SR line as the card's schedule anchor.
+    // include a following bare SR line as the card's schedule anchor
     if (isBareSRLine(lines[i + 1])) {
         rawLines.push(lines[i + 1] ?? "");
         i++;
@@ -81,15 +76,13 @@ function collectCardLines(
     return { rawLines, endLine: i };
 }
 
-// ---------------------------------------------------------------------------
-// Tokenisation
-// ---------------------------------------------------------------------------
+// tokenisation
 
 type SeparatorKind = "-" | "--" | ":" | "::" | "=";
 
 interface Event {
     sep: SeparatorKind;
-    content: string;   // trimmed content that FOLLOWS this separator
+    content: string;   // trimmed content that follows this separator
 }
 
 interface TokenizedCard {
@@ -97,8 +90,8 @@ interface TokenizedCard {
     events: Event[];
 }
 
-// Split on `--`, `::`, `-`, `:`, `=` while keeping the separator tokens.
-// Order in the alternation matters — longer variants first.
+// split on `--`, `::`, `-`, `:`, `=` while keeping the separator tokens.
+// order in the alternation matters — longer variants first.
 const SEPARATOR_SPLIT_RE = /(--|::|-|:|=)/;
 
 function tokenize(text: string): TokenizedCard | null {
@@ -123,15 +116,13 @@ function isDashSep(sep: SeparatorKind): boolean {
     return sep === "-" || sep === "--";
 }
 
-// ---------------------------------------------------------------------------
-// Field assignment
-// ---------------------------------------------------------------------------
+// field assignment
 
 function assignFields(tokenized: TokenizedCard): CardFields | null {
     const { word, events } = tokenized;
     if (events.length === 0) return null;
 
-    // Locate the LAST dash separator (= translation boundary).
+    // locate the last dash separator (the translation boundary)
     let lastDashIdx = -1;
     for (let i = events.length - 1; i >= 0; i--) {
         if (isDashSep(events[i]!.sep)) {
@@ -151,16 +142,16 @@ function assignFields(tokenized: TokenizedCard): CardFields | null {
     for (let i = 0; i < lastDashIdx; i++) {
         const ev = events[i]!;
         if (isDashSep(ev.sep)) {
-            if (explanation !== null) return null;   // >1 explanation is invalid
+            if (explanation !== null) return null;   // more than one explanation is invalid
             if (!ev.content) return null;
             explanation = ev.content;
         } else if (ev.sep === ":" || ev.sep === "::") {
             if (!ev.content) return null;
             examples.push(ev.content);
         } else if (ev.sep === "=") {
-            if (type !== null) return null;          // >1 type marker is invalid
+            if (type !== null) return null;          // more than one type marker is invalid
             if (!ev.content) return null;
-            // Unknown type keys are stored as-is and rendered with a neutral colour.
+            // unknown type keys are stored as-is and rendered with a neutral colour
             type = ev.content;
         }
     }
@@ -168,9 +159,7 @@ function assignFields(tokenized: TokenizedCard): CardFields | null {
     return { word, explanation, examples, type, translation };
 }
 
-// ---------------------------------------------------------------------------
 // SR comment extraction
-// ---------------------------------------------------------------------------
 
 function extractAndStripComments(rawLines: string[]): { textWithoutSR: string; originalComment: string | null } {
     let originalComment: string | null = null;
@@ -191,9 +180,7 @@ function schedulesFromComment(comment: string | null): [ScheduleInfo | null, Sch
     return [parsed[0] ?? null, parsed[1] ?? null];
 }
 
-// ---------------------------------------------------------------------------
-// Public parser
-// ---------------------------------------------------------------------------
+// public parser
 
 export function parseCard(
     lines: string[],
@@ -213,9 +200,7 @@ export function parseCard(
     return { fields, schedules, startLine, endLine, rawLines, originalComment };
 }
 
-// ---------------------------------------------------------------------------
-// Both-sided card model
-// ---------------------------------------------------------------------------
+// both sided card model
 
 export function frontFace(card: ParsedCard): CardFace {
     return {
@@ -243,20 +228,11 @@ export function cardReveal(card: ParsedCard): CardReveal {
     };
 }
 
-// ---------------------------------------------------------------------------
-// Writing back to source
-// ---------------------------------------------------------------------------
+// writing back to source
 
-/**
- * Return an updated copy of `card.rawLines` where the SR HTML comment lives
- * on its own dedicated line beneath the card's text.
- *
- * - Any inline SR comment on a text line is stripped.
- * - Any pre-existing bare SR line is replaced.
- * - The result is always `[...textLines, srCommentLine]` — one line longer
- *   than the text alone. Call sites must handle possible length changes
- *   compared to the input `card.rawLines`.
- */
+// returns updated rawLines with the SR comment on its own dedicated last line.
+// any inline SR on a text line is stripped; any existing bare SR line is replaced.
+// result is always [...textLines, srCommentLine] — callers must handle the length change.
 export function withUpdatedSchedules(
     card: ParsedCard,
     schedules: [ScheduleInfo | null, ScheduleInfo | null],
@@ -266,9 +242,9 @@ export function withUpdatedSchedules(
 
     const textLines: string[] = [];
     for (const line of card.rawLines) {
-        // Drop lines that were purely an SR comment — the SR is re-emitted below.
+        // drop lines that were purely an SR comment — the SR is re-emitted below
         if (SR_ONLY_LINE_RE.test(line)) continue;
-        // Strip any inline SR from mixed text/SR lines.
+        // strip any inline SR from mixed text/SR lines
         const stripped = line.replace(SR_COMMENT_TRAILING_RE, "").trimEnd();
         textLines.push(stripped);
     }

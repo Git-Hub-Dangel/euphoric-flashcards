@@ -158,7 +158,7 @@ export class SentenceBuilderModal extends Modal {
     private selectWords(): WordItem[] {
         const { wordCount, wordSelection, cardSide } = this.options;
 
-        // Orientation is chosen once per sentence: all cards share the same face.
+        // orientation once per sentence for all cards
         const faceIndex: 0 | 1 =
             cardSide === "Front" ? 0
             : cardSide === "Back" ? 1

@@ -10,19 +10,11 @@ import { RepItemScheduleInfoOsr } from "src/scheduling/osr";
 
 export type ScheduleInfo = RepItemScheduleInfoOsr;
 
-// ---------------------------------------------------------------------------
-// Parsing
-// ---------------------------------------------------------------------------
+// parsing
 
-/**
- * Parse the SR HTML comment on a card line, returning one ScheduleInfo per card.
- *
- * Positional convention for both-sided cards:
- *   segment[0] → Front card schedule
- *   segment[1] → Back card schedule
- *
- * A segment that resolves to the dummy "new card" date returns null (card is new).
- */
+// parse the SR HTML comment on a card line, returning one ScheduleInfo per card.
+// positional: segment[0] is front, segment[1] is back.
+// a segment matching the dummy "new card" date returns null.
 export function parseScheduleComment(comment: string): (ScheduleInfo | null)[] {
     const inner = comment
         .replace(/^<!--SR:/, "")
@@ -52,14 +44,9 @@ function parseSM2Segment(
     return new RepItemScheduleInfoOsr(dueDate, interval, ease, delayBeforeReviewTicks);
 }
 
-// ---------------------------------------------------------------------------
-// Writing
-// ---------------------------------------------------------------------------
+// writing
 
-/**
- * Serialise an array of ScheduleInfo objects (one per card, positionally ordered)
- * into an SR HTML comment string.
- */
+// serialise an array of ScheduleInfo objects (positionally ordered) into an SR HTML comment string
 export function buildScheduleComment(schedules: (ScheduleInfo | null)[], baseEase: number): string {
     const segments = schedules
         .map((s) =>
@@ -71,17 +58,15 @@ export function buildScheduleComment(schedules: (ScheduleInfo | null)[], baseEas
     return SR_HTML_COMMENT_BEGIN + segments + SR_HTML_COMMENT_END;
 }
 
-// ---------------------------------------------------------------------------
-// Note-level read/write helpers
-// ---------------------------------------------------------------------------
+// note level helpers
 
-/** Extract the first SR comment from a line of note text, or null. */
+/** extract the first SR comment from a line of note text, or null */
 export function extractCommentFromLine(line: string): string | null {
     const match = line.match(/<!--SR:!.+?-->/);
     return match ? match[0] : null;
 }
 
-/** Replace (or append) the SR comment on a given line. */
+/** replace (or append) the SR comment on a given line */
 export function replaceCommentOnLine(line: string, newComment: string): string {
     if (SR_COMMENT_FINDER.test(line)) {
         SR_COMMENT_FINDER.lastIndex = 0;

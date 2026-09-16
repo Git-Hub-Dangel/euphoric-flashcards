@@ -49,7 +49,6 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
         { key: "n", label: "noun", color: "#4a9eff" },
         { key: "v", label: "verb", color: "#ff7043" },
         { key: "a", label: "adjective", color: "#66bb6a" },
-        { key: "cv", label: "changed verb", color: "#ff7400" },
     ],
 
     defaultCardSide: "Shuffle",

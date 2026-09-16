@@ -6,9 +6,7 @@ import { DueDateHistogram } from "src/scheduling/due-date-histogram";
 import { ReviewResponse } from "src/scheduling/review-response";
 import { EuphoricSettings } from "src/settings";
 
-// ---------------------------------------------------------------------------
-// Schedule state
-// ---------------------------------------------------------------------------
+// schedule state
 
 export class RepItemScheduleInfoOsr {
     public dueDate: Moment;
@@ -76,9 +74,7 @@ export class RepItemScheduleInfoOsr {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Core SM-2-OSR scheduling function — arithmetic must not be changed
-// ---------------------------------------------------------------------------
+// core SM-2-OSR function — arithmetic must not be changed
 
 export function osrSchedule(
     response: ReviewResponse,
@@ -125,9 +121,7 @@ export function osrSchedule(
     return { interval, ease };
 }
 
-// ---------------------------------------------------------------------------
-// Interval display helper (used for review button labels)
-// ---------------------------------------------------------------------------
+// interval display helper (used for review button labels)
 
 export function textInterval(interval: number | null | undefined, short = true): string {
     if (interval === null || interval === undefined) return "New";
@@ -146,9 +140,7 @@ export function textInterval(interval: number | null | undefined, short = true):
     }
 }
 
-// ---------------------------------------------------------------------------
-// Card-level algorithm (note-level methods removed — not used in this plugin)
-// ---------------------------------------------------------------------------
+// card level algorithm (note level methods removed — not used in this plugin)
 
 export class SRAlgorithmOsr {
     private settings: EuphoricSettings;
@@ -160,8 +152,11 @@ export class SRAlgorithmOsr {
     static readonly initialInterval: number = 1.0;
 
     cardGetResetSchedule(): RepItemScheduleInfoOsr {
+        // used after Again → OK: schedule the card 1 day out so it doesn't
+        // resurface in today's session or the next fresh session.
+        const dueDate = globalDateProvider.today.clone().add(SRAlgorithmOsr.initialInterval, "d");
         return new RepItemScheduleInfoOsr(
-            globalDateProvider.today,
+            dueDate,
             SRAlgorithmOsr.initialInterval,
             this.settings.baseEase,
             0,
