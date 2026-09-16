@@ -16,10 +16,10 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         containerEl.empty();
 
         this.renderDecks(containerEl);
-        this.renderScheduling(containerEl);
         this.renderCardTypes(containerEl);
         this.renderReview(containerEl);
         this.renderSentenceBuilder(containerEl);
+        this.renderScheduling(containerEl);
     }
 
     private save(): void {
@@ -205,7 +205,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             .setName("Word count")
             .setDesc("Number of words shown per sentence.")
             .addSlider(slider => {
-                slider.setLimits(1, 20, 1);
+                slider.setLimits(1, 17, 1);
                 slider.setValue(this.plugin.data.settings.sentenceBuilderWordCount);
                 slider.setDynamicTooltip();
                 slider.onChange(v => {

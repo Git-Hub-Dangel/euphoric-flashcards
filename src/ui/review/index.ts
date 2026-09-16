@@ -169,7 +169,7 @@ export class ReviewModal extends Modal {
     private addBackButton(): void {
         const btn = this.modalEl.createEl("button", {
             cls: "ef-back-btn",
-            attr: { "aria-label": "Back to Explorer" },
+            attr: { "aria-label": "Back to Explorer", tabindex: "-1" },
         });
         setIcon(btn, "arrow-left");
         btn.addEventListener("click", () => this.backToExplorer());

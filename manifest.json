@@ -1,9 +1,9 @@
 {
     "id": "euphoric-flashcards",
     "name": "Euphoric Flashcards",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "minAppVersion": "1.2.8",
-    "description": "Spaced-repetition flashcard plugin with tag-based decks, a flexible card parser, and Sentence Builder mode.",
+    "description": "Make flashcards engaging again. A minimal and fun spaced-repetition system that offers more than simple card review. Locally and offline.",
     "author": "Daniel Khansa",
     "authorUrl": "",
     "isDesktopOnly": false
