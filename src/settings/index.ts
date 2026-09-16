@@ -49,6 +49,8 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
         { key: "n", label: "noun", color: "#4a9eff" },
         { key: "v", label: "verb", color: "#ff7043" },
         { key: "a", label: "adjective", color: "#66bb6a" },
+        { key: "p", label: "phrase", color: "#B349C1" },
+        { key: "i", label: "idiom", color: "#DFD06D" },
     ],
 
     defaultCardSide: "Shuffle",
@@ -56,5 +58,5 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
 
     defaultSentenceBuilderSide: "Shuffle",
     sentenceBuilderWordCount: 4,
-    sentenceBuilderSelection: "Random",
+    sentenceBuilderSelection: "Optimised",
 };

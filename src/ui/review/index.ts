@@ -4,6 +4,7 @@ import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
 import { SRAlgorithmOsr, textInterval } from "src/scheduling/osr";
 import { DueDateHistogram } from "src/scheduling/due-date-histogram";
+import { PREFERRED_DATE_FORMAT } from "src/scheduling/constants";
 import { withUpdatedSchedules, frontFace, backFace, cardReveal, parseCard } from "src/parsing";
 import type { ParsedCard, CardFace } from "src/parsing";
 import type { ScheduleInfo } from "src/persistence";
@@ -63,13 +64,18 @@ function buildReviewQueue(
 // Scheduling helpers
 // ---------------------------------------------------------------------------
 
+function histogramFor(plugin: EuphoricFlashcardsPlugin): DueDateHistogram {
+    if (!plugin.data.settings.loadBalance) return new DueDateHistogram();
+    return plugin.histogramStore.toRelativeHistogram(globalDateProvider.today);
+}
+
 function previewInterval(
     schedule: ScheduleInfo | null,
     response: ReviewResponse,
     plugin: EuphoricFlashcardsPlugin,
 ): number {
     const algo = new SRAlgorithmOsr(plugin.data.settings);
-    const h = new DueDateHistogram();
+    const h = histogramFor(plugin);
     if (schedule === null) return algo.cardGetNewSchedule(response, h).interval;
     return algo.cardCalcUpdatedSchedule(response, schedule, h).interval;
 }
@@ -80,7 +86,7 @@ function applyResponse(
     plugin: EuphoricFlashcardsPlugin,
 ): ScheduleInfo {
     const algo = new SRAlgorithmOsr(plugin.data.settings);
-    const h = new DueDateHistogram();
+    const h = histogramFor(plugin);
     if (schedule === null) return algo.cardGetNewSchedule(response, h);
     return algo.cardCalcUpdatedSchedule(response, schedule, h);
 }
@@ -386,6 +392,7 @@ export class ReviewModal extends Modal {
     }
 
     private async writeSchedule(item: ReviewItem, newSchedule: ScheduleInfo): Promise<void> {
+        const oldSchedule = item.card.schedules[item.faceIndex];
         const updatedSchedules: [ScheduleInfo | null, ScheduleInfo | null] = [
             item.card.schedules[0],
             item.card.schedules[1],
@@ -395,6 +402,15 @@ export class ReviewModal extends Modal {
         const newLines = withUpdatedSchedules(item.card, updatedSchedules, this.plugin.data.settings.baseEase);
         const oldLength = item.card.rawLines.length;
         await writeCardBack(this.app.vault, this.fileCache, item.filePath, item.card, newLines);
+
+        // update the persisted histogram: remove the old due-date bucket and
+        // add the new one. skips dummy dates internally.
+        if (this.plugin.data.settings.loadBalance) {
+            const store = this.plugin.histogramStore;
+            if (oldSchedule !== null) store.decrement(oldSchedule.dueDate.format(PREFERRED_DATE_FORMAT));
+            store.increment(newSchedule.dueDate.format(PREFERRED_DATE_FORMAT));
+            void this.plugin.saveData_();
+        }
 
         // Keep the in-memory card consistent with what we just wrote so any
         // same-session re-write (e.g. the other face of the same card) sees

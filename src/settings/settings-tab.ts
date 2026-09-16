@@ -35,7 +35,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
 
         new Setting(el)
             .setName("Root deck tags")
-            .setDesc("One tag per line, e.g. #español. Cards under these tags (and their subtags) are included.")
+            .setDesc("One tag per line. (e.g. #español) Card definitions in notes located under these tags are included. Specifying a tag will include all of its subdecks. (e.g. defining #español will include all words defined under tag patterns #español, #español/...,  #español/.../..., etc. (e.g. #español/palabras-clave,  #español/verbos)")
             .addTextArea(text => {
                 text.setPlaceholder("#español\n#deutsch");
                 text.setValue(this.plugin.data.settings.rootDeckTags.join("\n"));
@@ -93,19 +93,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             v => { this.plugin.data.settings.maxLinkFactor = v; });
 
         new Setting(el)
-            .setName("Load balance")
-            .setDesc("Spread cards across nearby days to avoid review spikes.")
-            .addToggle(toggle => {
-                toggle.setValue(this.plugin.data.settings.loadBalance);
-                toggle.onChange(v => {
-                    this.plugin.data.settings.loadBalance = v;
-                    this.save();
-                });
-            });
-
-        new Setting(el)
             .setName("Start of day")
-            .setDesc("Cards scheduled for today are due after this time (HH:MM:SS).")
+            .setDesc("Cards whose due date is today only become available after this time. Set to e.g. 04:00:00 if you study past midnight and want yesterday's cards to stay due until then (HH:MM:SS).")
             .addText(text => {
                 text.setPlaceholder("00:00:00");
                 text.setValue(this.plugin.data.settings.startOfDay);
@@ -114,6 +103,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     this.save();
                 });
             });
+
+        this.renderHistogramControls(el);
     }
 
     // card types
@@ -121,7 +112,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
     private renderCardTypes(el: HTMLElement): void {
         el.createEl("h2", { text: "Card types" });
         el.createEl("p", {
-            text: "Keys are used in card syntax (e.g. =n for noun). Colors are shown as badge backgrounds.",
+            text: "Keys are used in card syntax (e.g. =n for noun). Define colors to differentiate types visually",
             cls: "setting-item-description",
         });
 
@@ -212,7 +203,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
 
         new Setting(el)
             .setName("Word count")
-            .setDesc("Number of words shown per sentence (1–20).")
+            .setDesc("Number of words shown per sentence.")
             .addSlider(slider => {
                 slider.setLimits(1, 20, 1);
                 slider.setValue(this.plugin.data.settings.sentenceBuilderWordCount);
@@ -224,8 +215,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             });
 
         new Setting(el)
-            .setName("Word selection")
-            .setDesc("Random: uniform draw. Optimised: ~half mature, rest new.")
+            .setName("Word selection method")
+            .setDesc("Random: random draw from selected deck. Optimised: assures, that the selection contains an even mix of older and newer cards.")
             .addDropdown(drop => {
                 drop.addOption("Random", "Random");
                 drop.addOption("Optimised", "Optimised");
@@ -237,7 +228,45 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             });
     }
 
-    // helpers
+    private renderHistogramControls(el: HTMLElement): void {
+        el.createEl("h3", { text: "Load Balancing" });
+        el.createEl("p", {
+            cls: "setting-item-description",
+            text: "A count of how many cards are due on each future day. Load balance uses this to nudge scheduled cards toward less-crowded days. Updates automatically as you review and does a full rebuild about once a day.",
+        });
+
+        new Setting(el)
+            .setName("Enable Load Balancing")
+            .setDesc("Spread cards across nearby days to avoid review spikes.")
+            .addToggle(toggle => {
+                toggle.setValue(this.plugin.data.settings.loadBalance);
+                toggle.onChange(v => {
+                    this.plugin.data.settings.loadBalance = v;
+                    this.save();
+                });
+            });
+
+        const builtAt = this.plugin.histogramStore.getBuiltAt();
+        const builtAtStr = builtAt ? new Date(builtAt).toLocaleString() : "never — rebuild recommended";
+
+        new Setting(el)
+            .setName("Rebuild histogram")
+            .setDesc(`Rescans every note in the vault. Takes a few seconds. Last full rebuild: ${builtAtStr}.`)
+            .addButton((btn: ButtonComponent) => {
+                btn.setButtonText("Rebuild now").onClick(async () => {
+                    btn.setDisabled(true);
+                    btn.setButtonText("Rebuilding…");
+                    try {
+                        await this.plugin.histogramStore.rebuild(this.app.vault);
+                        this.save();
+                    } catch (err) {
+                        console.error("EuphoricFlashcards: histogram rebuild failed", err);
+                    } finally {
+                        this.display();
+                    }
+                });
+            });
+    }
 
     private addSliderNumber(
         el: HTMLElement,
