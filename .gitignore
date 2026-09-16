@@ -1,0 +1,9 @@
+node_modules/
+build/
+data.json
+.DS_Store
+coverage/
+
+# AI
+.claude
+Handoff.md

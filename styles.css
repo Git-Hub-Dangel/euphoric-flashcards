@@ -1,0 +1,638 @@
+/* ─────────────────────────────────────────────────────────
+   Euphoric Flashcards — UI styles
+   ───────────────────────────────────────────────────────── */
+
+/* Back-to-Explorer button — pinned to modal top-left, mirrors Obsidian's built-in close X. */
+.ef-back-btn {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    z-index: 10;
+}
+.ef-back-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+/* Fullscreen modal */
+.modal.ef-modal-fullscreen {
+    width: 90vw;
+    max-width: 90vw;
+    height: 90vh;
+    max-height: 90vh;
+}
+.modal.ef-modal-fullscreen .modal-content {
+    height: calc(90vh - 40px);
+    max-height: calc(90vh - 40px);
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+@media (max-width: 600px) {
+    .modal.ef-modal-fullscreen {
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        max-height: 100vh;
+    }
+    .modal.ef-modal-fullscreen .modal-content {
+        height: calc(100vh - 40px);
+        max-height: calc(100vh - 40px);
+    }
+}
+
+/* ── Utility ─────────────────────────────────────────────── */
+.ef-hidden { display: none !important; }
+.ef-loading { padding: 20px; color: var(--text-muted); }
+.ef-muted   { color: var(--text-muted); }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.ef-btn {
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: opacity 0.1s;
+}
+.ef-btn:hover { opacity: 0.85; }
+
+.ef-btn.ef-btn-primary {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+.ef-btn.ef-btn-review {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+.ef-btn.ef-btn-cram {
+    background-color: var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+/* Response buttons — icon on the left, label / interval stacked on the right. */
+.ef-btn-response {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    min-width: 104px;
+    white-space: nowrap;
+}
+.ef-btn-response .ef-btn-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.ef-btn-text {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1.15;
+}
+.ef-btn-label    { font-weight: 600; font-size: 0.95em; }
+.ef-btn-interval { font-size: 0.72em; opacity: 0.85; }
+
+/* Keyboard-shortcut badge shown at the top-left of each response button. */
+.ef-btn-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-right: 2px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.18);
+    font-size: 0.72em;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    opacity: 0.9;
+    flex-shrink: 0;
+}
+.ef-btn.ef-btn-again .ef-btn-key {
+    background: rgba(0, 0, 0, 0.15);
+}
+
+.ef-btn.ef-btn-again {
+    background-color: var(--background-modifier-border);
+    color: var(--text-normal);
+}
+.ef-btn.ef-btn-okay {
+    background-color: color-mix(in srgb, var(--interactive-accent) 55%, white);
+    color: var(--text-on-accent);
+}
+.ef-btn.ef-btn-good {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+.ef-btn.ef-btn-easy {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+.ef-btn.ef-btn-regen {
+    background-color: var(--background-modifier-border);
+    color: var(--text-normal);
+}
+
+.ef-btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+}
+
+/* ── Explorer ────────────────────────────────────────────── */
+.ef-explorer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.ef-explorer-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+.ef-explorer-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.2em;
+    font-weight: 600;
+}
+.ef-explorer-icon {
+    display: flex;
+    align-items: center;
+    color: var(--interactive-accent);
+}
+
+/* ── Review Settings section ──────────────────────────────── */
+.ef-review-settings {
+    padding: 12px 24px 4px;
+    flex-shrink: 0;
+}
+.ef-settings-heading {
+    font-size: 0.75em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+.ef-settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 5px 0;
+}
+.ef-settings-label {
+    min-width: 110px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+.ef-settings-select,
+.ef-settings-input {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    font-size: 0.9em;
+    color: var(--text-normal);
+}
+.ef-settings-input { width: 60px; }
+.ef-settings-panel { padding-bottom: 10px; }
+
+/* ── Section title (e.g. "Decks") ────────────────────────── */
+.ef-section-title {
+    padding: 22px 24px 10px;
+    font-size: 1.5em;
+    font-weight: 700;
+    color: var(--text-normal);
+    flex-shrink: 0;
+}
+
+/* ── Deck list ────────────────────────────────────────────── */
+.ef-deck-list-wrap {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+/* Sticky header — sits above the scroll region so it stays visible. */
+.ef-deck-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 56px 56px 56px 56px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: transparent;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.ef-deck-list {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+.ef-deck-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 56px 56px 56px 56px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+.ef-deck-row:hover { background: var(--background-secondary); }
+
+.ef-deck-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+.ef-deck-name {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.ef-deck-chevron {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+.ef-deck-chevron-active:hover { color: var(--text-normal); }
+
+.ef-deck-stat-col {
+    text-align: right;
+    font-size: 0.9em;
+    font-variant-numeric: tabular-nums;
+}
+
+.ef-stat-total { color: var(--text-normal); }
+.ef-stat-seen  { color: var(--text-muted); }
+.ef-stat-due   { color: #e53935; }
+.ef-stat-new   { color: #1e88e5; }
+
+.ef-empty-state {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* ── Narrow viewport (mobile, split panes) ────────────────── */
+@media (max-width: 600px) {
+    .ef-explorer-header { padding: 10px 14px; }
+    .ef-review-settings { padding: 10px 14px 2px; }
+    .ef-settings-row { gap: 8px; }
+    .ef-settings-label { min-width: 88px; }
+    .ef-section-title { padding: 14px 14px 6px; font-size: 1.25em; }
+
+    .ef-deck-header,
+    .ef-deck-row {
+        grid-template-columns: minmax(0, 1fr) 40px 40px 40px 40px;
+        gap: 4px;
+        padding: 8px 12px;
+    }
+    .ef-deck-stat-col { font-size: 0.82em; }
+    .ef-deck-header { font-size: 0.65em; letter-spacing: 0.05em; }
+}
+
+@media (max-width: 400px) {
+    .ef-deck-header,
+    .ef-deck-row {
+        grid-template-columns: minmax(0, 1fr) 34px 34px 34px;
+        padding: 8px 10px;
+    }
+    /* Hide "Seen" — derivable from Total − New. */
+    .ef-deck-header .ef-stat-seen,
+    .ef-deck-row .ef-stat-seen { display: none; }
+}
+
+@media (max-width: 600px) {
+    .ef-sb-header,
+    .ef-sb-footer { padding: 10px 14px; }
+    .ef-sb-word-list { padding: 10px 14px; gap: 8px; }
+    .ef-sb-prompt-row { padding: 12px 14px; gap: 8px; }
+    .ef-sb-reveal-area { padding: 10px 14px 12px; }
+    .ef-sb-word-text { font-size: 1.1em; }
+}
+
+/* ── Review ──────────────────────────────────────────────── */
+.ef-review {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.ef-review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+.ef-review-deck-name { font-weight: 600; }
+.ef-review-progress  { color: var(--text-muted); font-size: 0.9em; }
+.ef-review-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.ef-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.ef-edit-btn:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+/* Edit card modal */
+.ef-edit-title {
+    margin: 0 0 12px;
+    font-size: 1.1em;
+}
+.ef-edit-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 10px 12px;
+    font-family: var(--font-monospace, monospace);
+    font-size: 0.9em;
+    line-height: 1.5;
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+.ef-edit-error {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: color-mix(in srgb, #e53935 15%, transparent);
+    border: 1px solid color-mix(in srgb, #e53935 40%, transparent);
+    border-radius: 4px;
+    color: var(--text-normal);
+    font-size: 0.85em;
+}
+.ef-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.ef-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 48px;
+    overflow-y: auto;
+    gap: 16px;
+}
+
+.ef-side-badge {
+    font-size: 0.75em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 3px 10px;
+    border-radius: 10px;
+}
+.ef-side-front { background: rgba(30,136,229,0.1);  color: #1e88e5; }
+.ef-side-back  { background: rgba(67,160,71,0.1);   color: #43a047; }
+
+.ef-card-prompt {
+    font-size: 2.2em;
+    font-weight: 700;
+    text-align: center;
+    color: var(--text-normal);
+}
+
+.ef-answer {
+    width: 100%;
+    max-width: 640px;
+    text-align: center;
+}
+
+/* Solution line: answer text + inline type badge on the right. */
+.ef-card-answer-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.ef-card-answer {
+    font-size: 1.6em;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.ef-type-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fff;
+    align-self: center;
+}
+
+.ef-explanation {
+    margin: 6px 0 8px;
+    color: var(--text-muted);
+    font-size: 0.95em;
+}
+
+/* Examples list — quoted sentences, no bullets, hairline divider on top. */
+.ef-examples {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+    font-size: 0.95em;
+}
+.ef-example-item {
+    margin: 3px 0;
+    line-height: 1.4;
+    font-style: italic;
+}
+
+.ef-review-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    padding: 16px 24px;
+    border-top: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+
+/* ── Sentence Builder ────────────────────────────────────── */
+.ef-sentence-builder {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.ef-sb-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+.ef-sb-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.2em;
+    font-weight: 600;
+}
+.ef-sb-icon {
+    display: flex;
+    align-items: center;
+    color: var(--interactive-accent);
+}
+
+.ef-sb-word-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ef-sb-word-row {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.ef-sb-prompt-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    gap: 12px;
+}
+
+.ef-sb-word-text {
+    font-size: 1.25em;
+    font-weight: 600;
+    color: var(--text-normal);
+    flex: 1;
+}
+
+.ef-sb-reveal-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: var(--background-secondary);
+    color: var(--text-muted);
+    font-size: 0.85em;
+    flex-shrink: 0;
+}
+
+.ef-sb-reveal-area {
+    border-top: 1px solid var(--background-modifier-border);
+    padding: 12px 18px 14px;
+}
+.ef-sb-reveal-area .ef-card-answer-line {
+    justify-content: flex-start;
+    margin-bottom: 8px;
+}
+
+.ef-sb-word-answer {
+    font-size: 1.05em;
+    font-weight: 500;
+    color: var(--text-normal);
+}
+
+.ef-sb-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-top: 1px solid var(--background-modifier-border);
+    flex-shrink: 0;
+}
+
+.ef-btn-regen {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── Done / empty screens ────────────────────────────────── */
+.ef-done {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    text-align: center;
+    padding: 40px;
+}
+.ef-done h2  { margin: 0; font-size: 1.6em; }
+.ef-done-sub { color: var(--text-muted); margin: 0; }

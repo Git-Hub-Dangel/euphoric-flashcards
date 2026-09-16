@@ -1,0 +1,24 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "paths": {
+            "src/*": ["./src/*"]
+        },
+        "inlineSourceMap": true,
+        "inlineSources": true,
+        "module": "ESNext",
+        "target": "ES2018",
+        "allowJs": false,
+        "strict": true,
+        "noImplicitAny": true,
+        "noUncheckedIndexedAccess": true,
+        "moduleResolution": "bundler",
+        "esModuleInterop": true,
+        "importHelpers": true,
+        "types": ["node"],
+        "lib": ["dom", "dom.Iterable", "ES2021"],
+        "noEmit": true
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "obsidian-spaced-repetition"]
+}
