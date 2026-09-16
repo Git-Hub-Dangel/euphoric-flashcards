@@ -3,7 +3,7 @@ import { preventBgTapDismiss } from "src/ui/modal-utils";
 
 export interface EditCardModalOptions {
     initialText: string;
-    // Return an error message to display (parse failed, write failed, ...) or
+    // Return an error message to display or
     // null on success. If null is returned, the modal closes.
     onSave: (newText: string) => Promise<string | null>;
     onClose?: () => void;
@@ -11,8 +11,6 @@ export interface EditCardModalOptions {
 
 export class EditCardModal extends Modal {
     private readonly opts: EditCardModalOptions;
-    private saved = false;
-
     constructor(app: App, opts: EditCardModalOptions) {
         super(app);
         this.opts = opts;
@@ -44,7 +42,6 @@ export class EditCardModal extends Modal {
             errorEl.addClass("ef-hidden");
             const err = await this.opts.onSave(textarea.value);
             if (err === null) {
-                this.saved = true;
                 this.close();
                 return;
             }
@@ -60,6 +57,5 @@ export class EditCardModal extends Modal {
     onClose(): void {
         this.contentEl.empty();
         this.opts.onClose?.();
-        void this.saved; // for future use — save side-effects handled in onSave
     }
 }
