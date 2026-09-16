@@ -70,8 +70,8 @@ export default class EuphoricFlashcardsPlugin extends Plugin {
         return ageMs >= oneDayMs;
     }
 
-    async onunload(): Promise<void> {
-        await this.saveData_();
+    onunload(): void {
+        void this.saveData_();
     }
 
     async loadData_(): Promise<void> {

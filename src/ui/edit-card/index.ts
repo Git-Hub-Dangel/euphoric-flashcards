@@ -29,9 +29,9 @@ export class EditCardModal extends Modal {
         textarea.value = this.opts.initialText;
         textarea.rows = Math.min(20, Math.max(4, this.opts.initialText.split("\n").length + 1));
 
-        const errorEl = this.contentEl.createEl("div", { cls: "ef-edit-error ef-hidden" });
+        const errorEl = this.contentEl.createDiv({ cls: "ef-edit-error ef-hidden" });
 
-        const actions = this.contentEl.createEl("div", { cls: "ef-edit-actions" });
+        const actions = this.contentEl.createDiv({ cls: "ef-edit-actions" });
         const cancelBtn = actions.createEl("button", { text: "Cancel", cls: "ef-btn" });
         const saveBtn = actions.createEl("button", { text: "Save", cls: "ef-btn ef-btn-primary" });
 

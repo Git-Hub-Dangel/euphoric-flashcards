@@ -229,15 +229,17 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     {
                         name: "Rebuild histogram",
                         desc: `Rescans every note in the vault. Takes a few seconds. Last full rebuild: ${builtAtStr}.`,
-                        action: async (): Promise<void> => {
-                            try {
-                                await this.plugin.histogramStore.rebuild(this.app.vault);
-                                await this.plugin.saveData_();
-                            } catch (err) {
-                                console.error("EuphoricFlashcards: histogram rebuild failed", err);
-                            } finally {
-                                this.update();
-                            }
+                        action: (): void => {
+                            void (async () => {
+                                try {
+                                    await this.plugin.histogramStore.rebuild(this.app.vault);
+                                    await this.plugin.saveData_();
+                                } catch (err) {
+                                    console.error("EuphoricFlashcards: histogram rebuild failed", err);
+                                } finally {
+                                    this.update();
+                                }
+                            })();
                         },
                     },
                 ],

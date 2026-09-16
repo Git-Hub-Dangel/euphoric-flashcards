@@ -194,7 +194,7 @@ export class ReviewModal extends Modal {
     }
 
     private renderEmpty(): void {
-        this.contentEl.createEl("div", { cls: "ef-done" }, div => {
+        this.contentEl.createDiv({ cls: "ef-done" }, div => {
             div.createEl("h2", { text: "Nothing to review" });
             div.createEl("p", { text: "All caught up for this deck.", cls: "ef-done-sub" });
             div.createEl("button", { text: "Back to Explorer", cls: "ef-btn ef-btn-primary" })
@@ -213,29 +213,29 @@ export class ReviewModal extends Modal {
         const settings = this.plugin.data.settings;
 
         // Header
-        this.contentEl.createEl("div", { cls: "ef-review-header" }, h => {
-            h.createEl("span", { text: this.node.fullPath, cls: "ef-review-deck-name" });
-            const right = h.createEl("div", { cls: "ef-review-header-right" });
+        this.contentEl.createDiv({ cls: "ef-review-header" }, h => {
+            h.createSpan({ text: this.node.fullPath, cls: "ef-review-deck-name" });
+            const right = h.createDiv({ cls: "ef-review-header-right" });
             const editBtn = right.createEl("button", { cls: "ef-edit-btn", attr: { "aria-label": "Edit card" } });
             setIcon(editBtn, "pencil");
             editBtn.addEventListener("click", () => this.openEditCardModal(item));
-            right.createEl("span", { text: `${this.reviewed} / ${this.totalCards - this.reviewed}`, cls: "ef-review-progress" });
+            right.createSpan({ text: `${this.reviewed} / ${this.totalCards - this.reviewed}`, cls: "ef-review-progress" });
         });
 
         // Card body
-        const body = this.contentEl.createEl("div", { cls: "ef-card-body" });
+        const body = this.contentEl.createDiv({ cls: "ef-card-body" });
 
-        body.createEl("div", { text: face.prompt, cls: "ef-card-prompt" });
+        body.createDiv({ text: face.prompt, cls: "ef-card-prompt" });
 
         // Answer (hidden until revealed)
-        const answerEl = body.createEl("div", { cls: "ef-answer ef-hidden" });
+        const answerEl = body.createDiv({ cls: "ef-answer ef-hidden" });
 
         // Solution line: translation + type badge (right-aligned inline)
-        answerEl.createEl("div", { cls: "ef-card-answer-line" }, line => {
-            line.createEl("span", { text: face.answer, cls: "ef-card-answer" });
+        answerEl.createDiv({ cls: "ef-card-answer-line" }, line => {
+            line.createSpan({ text: face.answer, cls: "ef-card-answer" });
             if (reveal.type) {
                 const tc = settings.cardTypes.find(t => t.key === reveal.type);
-                const badge = line.createEl("span", {
+                const badge = line.createSpan({
                     text: tc?.label ?? reveal.type,
                     cls: "ef-type-badge",
                 });
@@ -247,14 +247,14 @@ export class ReviewModal extends Modal {
             answerEl.createEl("p", { text: reveal.explanation, cls: "ef-explanation" });
         }
         if (reveal.examples.length > 0) {
-            const list = answerEl.createEl("div", { cls: "ef-examples" });
+            const list = answerEl.createDiv({ cls: "ef-examples" });
             for (const ex of reveal.examples) {
-                list.createEl("div", { text: `“${ex}”`, cls: "ef-example-item" });
+                list.createDiv({ text: `"${ex}"`, cls: "ef-example-item" });
             }
         }
 
         // Actions
-        const actions = this.contentEl.createEl("div", { cls: "ef-review-actions" });
+        const actions = this.contentEl.createDiv({ cls: "ef-review-actions" });
         const showBtn = actions.createEl("button", { text: "Show Answer", cls: "ef-btn ef-btn-primary" });
         const doReveal = (): void => {
             if (this.revealed) return;
@@ -325,13 +325,13 @@ export class ReviewModal extends Modal {
         onClick: () => void,
     ): void {
         const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        btn.createEl("span", { text: String(keyNum), cls: "ef-btn-key" });
-        const iconEl = btn.createEl("span", { cls: "ef-btn-icon" });
+        btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+        const iconEl = btn.createSpan({ cls: "ef-btn-icon" });
         setIcon(iconEl, icon);
-        const textEl = btn.createEl("span", { cls: "ef-btn-text" });
-        textEl.createEl("span", { text: label, cls: "ef-btn-label" });
+        const textEl = btn.createSpan({ cls: "ef-btn-text" });
+        textEl.createSpan({ text: label, cls: "ef-btn-label" });
         if (interval !== null) {
-            textEl.createEl("span", { text: interval, cls: "ef-btn-interval" });
+            textEl.createSpan({ text: interval, cls: "ef-btn-interval" });
         }
         btn.addEventListener("click", onClick);
         this.addKey(String(keyNum), onClick);
@@ -487,7 +487,7 @@ export class ReviewModal extends Modal {
     private renderDone(): void {
         this.clearKeymap();
         this.contentEl.empty();
-        this.contentEl.createEl("div", { cls: "ef-done" }, div => {
+        this.contentEl.createDiv({ cls: "ef-done" }, div => {
             div.createEl("h2", { text: "Session complete!" });
             div.createEl("p", {
                 text: `Reviewed ${this.reviewed} card${this.reviewed !== 1 ? "s" : ""}.`,

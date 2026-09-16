@@ -87,7 +87,7 @@ export class ExplorerModal extends Modal {
         this.contentEl.empty();
 
         if (!hasAnyCards) {
-            this.contentEl.createEl("div", { cls: "ef-empty-state" }, div => {
+            this.contentEl.createDiv({ cls: "ef-empty-state" }, div => {
                 div.createEl("h2", { text: "No decks found" });
                 div.createEl("p", {
                     text: "Add root deck tags in Settings → Euphoric Flashcards.",
@@ -98,19 +98,19 @@ export class ExplorerModal extends Modal {
         }
 
         // ── Header ──────────────────────────────────────────────────────────
-        this.contentEl.createEl("div", { cls: "ef-explorer-header" }, h => {
-            const titleEl = h.createEl("div", { cls: "ef-explorer-title" });
-            const iconEl = titleEl.createEl("span", { cls: "ef-explorer-icon" });
+        this.contentEl.createDiv({ cls: "ef-explorer-header" }, h => {
+            const titleEl = h.createDiv({ cls: "ef-explorer-title" });
+            const iconEl = titleEl.createSpan({ cls: "ef-explorer-icon" });
             setIcon(iconEl, "layers");
-            titleEl.createEl("span", { text: "Review" });
+            titleEl.createSpan({ text: "Review" });
         });
 
         // ── Review Settings ──────────────────────────────────────────────────
-        this.contentEl.createEl("div", { cls: "ef-review-settings" }, section => {
-            section.createEl("div", { text: "Review Settings", cls: "ef-settings-heading" });
+        this.contentEl.createDiv({ cls: "ef-review-settings" }, section => {
+            section.createDiv({ text: "Review Settings", cls: "ef-settings-heading" });
 
-            section.createEl("div", { cls: "ef-settings-row" }, row => {
-                row.createEl("span", { text: "Review Mode", cls: "ef-settings-label" });
+            section.createDiv({ cls: "ef-settings-row" }, row => {
+                row.createSpan({ text: "Review Mode", cls: "ef-settings-label" });
                 const sel = row.createEl("select", { cls: "ef-settings-select" });
                 const modes: [ReviewMode, string][] = [
                     ["Review", "Review"],
@@ -129,7 +129,7 @@ export class ExplorerModal extends Modal {
                 });
             });
 
-            this.settingsPanelEl = section.createEl("div", { cls: "ef-settings-panel" });
+            this.settingsPanelEl = section.createDiv({ cls: "ef-settings-panel" });
         });
 
         this.renderSettingsPanel();
@@ -137,20 +137,20 @@ export class ExplorerModal extends Modal {
         // ── Deck list ────────────────────────────────────────────────────────
         this.roots = [...tree.values()].filter(n => n.stats.total > 0);
 
-        this.contentEl.createEl("div", { text: "Decks", cls: "ef-section-title" });
+        this.contentEl.createDiv({ text: "Decks", cls: "ef-section-title" });
 
-        const wrap = this.contentEl.createEl("div", { cls: "ef-deck-list-wrap" });
+        const wrap = this.contentEl.createDiv({ cls: "ef-deck-list-wrap" });
 
         // Sticky header row with column labels
-        wrap.createEl("div", { cls: "ef-deck-header" }, h => {
-            h.createEl("span"); // spacer above name column
-            h.createEl("span", { text: "Total", cls: "ef-deck-stat-col ef-stat-total" });
-            h.createEl("span", { text: "Seen",  cls: "ef-deck-stat-col ef-stat-seen" });
-            h.createEl("span", { text: "Due",   cls: "ef-deck-stat-col ef-stat-due" });
-            h.createEl("span", { text: "New",   cls: "ef-deck-stat-col ef-stat-new" });
+        wrap.createDiv({ cls: "ef-deck-header" }, h => {
+            h.createSpan(); // spacer above name column
+            h.createSpan({ text: "Total", cls: "ef-deck-stat-col ef-stat-total" });
+            h.createSpan({ text: "Seen",  cls: "ef-deck-stat-col ef-stat-seen" });
+            h.createSpan({ text: "Due",   cls: "ef-deck-stat-col ef-stat-due" });
+            h.createSpan({ text: "New",   cls: "ef-deck-stat-col ef-stat-new" });
         });
 
-        this.deckListEl = wrap.createEl("div", { cls: "ef-deck-list" });
+        this.deckListEl = wrap.createDiv({ cls: "ef-deck-list" });
         this.renderDeckList();
     }
 
@@ -188,8 +188,8 @@ export class ExplorerModal extends Modal {
         current: string,
         onChange: (v: string) => void,
     ): void {
-        container.createEl("div", { cls: "ef-settings-row" }, row => {
-            row.createEl("span", { text: label, cls: "ef-settings-label" });
+        container.createDiv({ cls: "ef-settings-row" }, row => {
+            row.createSpan({ text: label, cls: "ef-settings-label" });
             const sel = row.createEl("select", { cls: "ef-settings-select" });
             for (const opt of options) {
                 const el = sel.createEl("option", { text: opt });
@@ -209,13 +209,13 @@ export class ExplorerModal extends Modal {
         const hasChildren = children.length > 0;
         const isExpanded = this.expanded.has(node.tag);
 
-        const row = container.createEl("div", { cls: "ef-deck-row" });
+        const row = container.createDiv({ cls: "ef-deck-row" });
 
         // Name cell: indent + chevron + name
-        const nameCell = row.createEl("div", { cls: "ef-deck-name-cell" });
+        const nameCell = row.createDiv({ cls: "ef-deck-name-cell" });
         nameCell.style.paddingLeft = `${depth * 20}px`;
 
-        const chevron = nameCell.createEl("span", { cls: "ef-deck-chevron" });
+        const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
         if (hasChildren) {
             setIcon(chevron, isExpanded ? "chevron-down" : "chevron-right");
             chevron.addClass("ef-deck-chevron-active");
@@ -229,12 +229,12 @@ export class ExplorerModal extends Modal {
             });
         }
 
-        nameCell.createEl("span", { text: node.name, cls: "ef-deck-name" });
+        nameCell.createSpan({ text: node.name, cls: "ef-deck-name" });
 
-        row.createEl("span", { text: String(total),    cls: "ef-deck-stat-col ef-stat-total" });
-        row.createEl("span", { text: String(seen),     cls: "ef-deck-stat-col ef-stat-seen" });
-        row.createEl("span", { text: String(due),      cls: "ef-deck-stat-col ef-stat-due" });
-        row.createEl("span", { text: String(newCards), cls: "ef-deck-stat-col ef-stat-new" });
+        row.createSpan({ text: String(total),    cls: "ef-deck-stat-col ef-stat-total" });
+        row.createSpan({ text: String(seen),     cls: "ef-deck-stat-col ef-stat-seen" });
+        row.createSpan({ text: String(due),      cls: "ef-deck-stat-col ef-stat-due" });
+        row.createSpan({ text: String(newCards), cls: "ef-deck-stat-col ef-stat-new" });
 
         row.addEventListener("click", () => this.launchMode(node));
 

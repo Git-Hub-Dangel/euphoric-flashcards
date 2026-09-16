@@ -108,16 +108,16 @@ export class SentenceBuilderModal extends Modal {
     }
 
     private buildLayout(): void {
-        this.contentEl.createEl("div", { cls: "ef-sb-header" }, h => {
-            const titleEl = h.createEl("div", { cls: "ef-sb-title" });
-            const iconEl = titleEl.createEl("span", { cls: "ef-sb-icon" });
+        this.contentEl.createDiv({ cls: "ef-sb-header" }, h => {
+            const titleEl = h.createDiv({ cls: "ef-sb-title" });
+            const iconEl = titleEl.createSpan({ cls: "ef-sb-icon" });
             setIcon(iconEl, "book-open");
-            titleEl.createEl("span", { text: "Sentence Builder" });
+            titleEl.createSpan({ text: "Sentence Builder" });
         });
 
-        this.wordListEl = this.contentEl.createEl("div", { cls: "ef-sb-word-list" });
+        this.wordListEl = this.contentEl.createDiv({ cls: "ef-sb-word-list" });
 
-        this.contentEl.createEl("div", { cls: "ef-sb-footer" }, footer => {
+        this.contentEl.createDiv({ cls: "ef-sb-footer" }, footer => {
             this.addFooterButton(footer, 1, "Regenerate", "refresh-cw", "ef-btn-regen", () => this.drawWords());
             this.addFooterButton(footer, 2, "Good", "check", "ef-btn-good", () => this.drawWords());
         });
@@ -135,9 +135,9 @@ export class SentenceBuilderModal extends Modal {
         onClick: () => void,
     ): void {
         const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        btn.createEl("span", { text: String(keyNum), cls: "ef-btn-key" });
-        setIcon(btn.createEl("span", { cls: "ef-btn-icon" }), icon);
-        btn.createEl("span", { text: label, cls: "ef-btn-label" });
+        btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+        setIcon(btn.createSpan({ cls: "ef-btn-icon" }), icon);
+        btn.createSpan({ text: label, cls: "ef-btn-label" });
         btn.addEventListener("click", onClick);
     }
 
@@ -204,23 +204,23 @@ export class SentenceBuilderModal extends Modal {
         const face = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
         const reveal = cardReveal(item.card);
 
-        const row = container.createEl("div", { cls: "ef-sb-word-row" });
+        const row = container.createDiv({ cls: "ef-sb-word-row" });
 
-        const promptRow = row.createEl("div", { cls: "ef-sb-prompt-row" });
-        promptRow.createEl("span", { text: face.prompt, cls: "ef-sb-word-text" });
+        const promptRow = row.createDiv({ cls: "ef-sb-prompt-row" });
+        promptRow.createSpan({ text: face.prompt, cls: "ef-sb-word-text" });
 
         const revealBtn = promptRow.createEl("button", { cls: "ef-btn ef-sb-reveal-btn" });
-        const revealBtnIcon = revealBtn.createEl("span", { cls: "ef-btn-icon" });
+        const revealBtnIcon = revealBtn.createSpan({ cls: "ef-btn-icon" });
         setIcon(revealBtnIcon, "eye");
-        revealBtn.createEl("span", { text: "Reveal" });
+        revealBtn.createSpan({ text: "Reveal" });
 
-        const revealArea = row.createEl("div", { cls: "ef-sb-reveal-area ef-hidden" });
+        const revealArea = row.createDiv({ cls: "ef-sb-reveal-area ef-hidden" });
 
-        revealArea.createEl("div", { cls: "ef-card-answer-line" }, line => {
-            line.createEl("span", { text: face.answer, cls: "ef-sb-word-answer" });
+        revealArea.createDiv({ cls: "ef-card-answer-line" }, line => {
+            line.createSpan({ text: face.answer, cls: "ef-sb-word-answer" });
             if (reveal.type) {
                 const tc = settings.cardTypes.find(t => t.key === reveal.type);
-                const badge = line.createEl("span", {
+                const badge = line.createSpan({
                     text: tc?.label ?? reveal.type,
                     cls: "ef-type-badge",
                 });
@@ -232,9 +232,9 @@ export class SentenceBuilderModal extends Modal {
             revealArea.createEl("p", { text: reveal.explanation, cls: "ef-explanation" });
         }
         if (reveal.examples.length > 0) {
-            const list = revealArea.createEl("div", { cls: "ef-examples" });
+            const list = revealArea.createDiv({ cls: "ef-examples" });
             for (const ex of reveal.examples) {
-                list.createEl("div", { text: `“${ex}”`, cls: "ef-example-item" });
+                list.createDiv({ text: `"${ex}"`, cls: "ef-example-item" });
             }
         }
 
