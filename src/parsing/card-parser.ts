@@ -44,10 +44,18 @@ const SR_ONLY_LINE_RE = /^\s*<!--SR:!.+?-->\s*$/;
 
 // a line continues the current card if, after stripping any trailing SR
 // comment, its last non-whitespace characters are "--" or "::".
+// en dash (U+2013) and em dash (U+2014) are accepted as equivalents of "--"
+// to survive smart-punctuation autocorrect (iOS keyboard, macOS smart dashes,
+// Smart Typography plugin) that rewrites consecutive hyphens to a single glyph.
 function hasContinuationMarker(line: string): boolean {
     const withoutSR = line.replace(SR_COMMENT_TRAILING_RE, "");
     const trimmed = withoutSR.trimEnd();
-    return trimmed.endsWith("--") || trimmed.endsWith("::");
+    return (
+        trimmed.endsWith("--") ||
+        trimmed.endsWith("::") ||
+        trimmed.endsWith("–") ||
+        trimmed.endsWith("—")
+    );
 }
 
 // a bare SR comment line immediately following the last text line is part of
@@ -92,7 +100,9 @@ interface TokenizedCard {
 
 // split on `--`, `::`, `-`, `:`, `=` while keeping the separator tokens.
 // order in the alternation matters — longer variants first.
-const SEPARATOR_SPLIT_RE = /(--|::|-|:|=)/;
+// en dash (–, U+2013) and em dash (—, U+2014) are treated as `--` equivalents
+// so smart-punctuation autocorrect doesn't break card parsing.
+const SEPARATOR_SPLIT_RE = /(--|::|-|:|=|–|—)/;
 
 function tokenize(text: string): TokenizedCard | null {
     const parts = text.split(SEPARATOR_SPLIT_RE);
@@ -107,6 +117,8 @@ function tokenize(text: string): TokenizedCard | null {
         const content = (parts[i + 1] ?? "").trim();
         if (rawSep === "-" || rawSep === "--" || rawSep === ":" || rawSep === "::" || rawSep === "=") {
             events.push({ sep: rawSep, content });
+        } else if (rawSep === "–" || rawSep === "—") {
+            events.push({ sep: "--", content });
         }
     }
     return { word, events };

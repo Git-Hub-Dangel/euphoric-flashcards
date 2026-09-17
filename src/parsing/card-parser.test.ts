@@ -116,6 +116,43 @@ describe("parseCard — multi-line cards", () => {
         expect(card.fields.translation).toBe("cat");
     });
 
+    it("accepts en dash (–) as `--` separator (smart-punctuation autocorrect)", () => {
+        const lines = ["gato – cat"];
+        const card = parseCard(lines, 0)!;
+        expect(card.fields.word).toBe("gato");
+        expect(card.fields.translation).toBe("cat");
+    });
+
+    it("accepts em dash (—) as `--` separator (smart-punctuation autocorrect)", () => {
+        const lines = ["gato — cat"];
+        const card = parseCard(lines, 0)!;
+        expect(card.fields.word).toBe("gato");
+        expect(card.fields.translation).toBe("cat");
+    });
+
+    it("accepts trailing em dash as continuation marker", () => {
+        const lines = [
+            "gato —",
+            "domestic feline —",
+            "cat",
+        ];
+        const card = parseCard(lines, 0)!;
+        expect(card.fields.word).toBe("gato");
+        expect(card.fields.explanation).toBe("domestic feline");
+        expect(card.fields.translation).toBe("cat");
+        expect(card.endLine).toBe(2);
+    });
+
+    it("mixed em dash and `--` in the same card", () => {
+        const lines = [
+            "gato --",
+            "domestic feline — cat",
+        ];
+        const card = parseCard(lines, 0)!;
+        expect(card.fields.explanation).toBe("domestic feline");
+        expect(card.fields.translation).toBe("cat");
+    });
+
     it("stops at first line with no continuation marker", () => {
         const lines = [
             "gato - cat",
