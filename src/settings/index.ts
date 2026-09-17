@@ -15,10 +15,10 @@ export interface EuphoricSettings {
     // Scheduling
     baseEase: number;
     easyBonus: number;
+    defaultIntervalChange: number;
     lapsesIntervalChange: number;
     loadBalance: boolean;
     maximumInterval: number;
-    maxLinkFactor: number;
     startOfDay: string;
 
     // Card types
@@ -39,10 +39,10 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
 
     baseEase: 250,
     easyBonus: 1.3,
+    defaultIntervalChange: 1.2,
     lapsesIntervalChange: 0.01,
     loadBalance: true,
     maximumInterval: 365,
-    maxLinkFactor: 0.3,
     startOfDay: "00:00:00",
 
     cardTypes: [

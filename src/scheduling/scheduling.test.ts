@@ -10,6 +10,7 @@ import { setupStaticDateProvider } from "src/scheduling/dates";
 // pin numeric outputs against the upstream test suite as equivalence proof.
 const UPSTREAM_DEFAULTS: EuphoricSettings = {
     ...DEFAULT_SETTINGS,
+    defaultIntervalChange: 0.5, // upstream used this value for Hard (was lapsesIntervalChange)
     lapsesIntervalChange: 0.5,  // upstream default; fork default is 0.01
     maximumInterval: 36525,     // upstream default; fork default is 365
 };
@@ -172,13 +173,21 @@ describe("SRAlgorithmOsr — card scheduling", () => {
         setupStaticDateProvider("2023-09-06");
     });
 
-    it("cardGetResetSchedule returns interval=1, ease=baseEase, due 1 day out", () => {
+    it("cardGetResetSchedule with null schedule: interval=1, ease=baseEase, due 1 day out", () => {
         const algo = new SRAlgorithmOsr(DEFAULT_SETTINGS);
-        const result = algo.cardGetResetSchedule();
+        const result = algo.cardGetResetSchedule(null);
         expect(result.interval).toBe(1);
         expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
         expect(result.dueDate.format("YYYY-MM-DD")).toBe("2023-09-07");
         expect(result.isDue()).toBe(false);
+    });
+
+    it("cardGetResetSchedule with existing schedule: applies lapsesIntervalChange", () => {
+        const algo = new SRAlgorithmOsr({ ...DEFAULT_SETTINGS, lapsesIntervalChange: 0.5 });
+        const old = RepItemScheduleInfoOsr.fromDueDateStr("2023-09-01", 10, DEFAULT_SETTINGS.baseEase, 0);
+        const result = algo.cardGetResetSchedule(old);
+        expect(result.interval).toBe(5);
+        expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
     });
 
     it("cardGetNewSchedule Good → non-zero interval, ease = baseEase", () => {

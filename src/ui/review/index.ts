@@ -43,7 +43,7 @@ function buildReviewQueue(
             if (isFaceDue(card.schedules[0])) items.push({ card, filePath, faceIndex: 0 });
             if (isFaceDue(card.schedules[1])) items.push({ card, filePath, faceIndex: 1 });
         } else {
-            // Cram — one side per card, determined by settings
+            // Cram, one side per card, determined by settings
             let fi: 0 | 1;
             if (cardSide === "Front") fi = 0;
             else if (cardSide === "Back") fi = 1;
@@ -375,7 +375,7 @@ export class ReviewModal extends Modal {
         this.revealed = false;
 
         const algo = new SRAlgorithmOsr(this.plugin.data.settings);
-        const newSchedule = algo.cardGetResetSchedule();
+        const newSchedule = algo.cardGetResetSchedule(item.card.schedules[item.faceIndex]);
         await this.writeSchedule(item, newSchedule);
 
         this.reviewed++;
@@ -386,7 +386,7 @@ export class ReviewModal extends Modal {
     private handleCramEasy(): void {
         if (!this.revealed) return;
         this.revealed = false;
-        // Cram never touches scheduling data — just advance.
+        // dont change scheduling during cram
         this.reviewed++;
         this.idx++;
         this.idx >= this.queue.length ? this.renderDone() : this.renderCard();

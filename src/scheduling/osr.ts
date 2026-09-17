@@ -97,7 +97,7 @@ export function osrSchedule(
         ease = Math.max(130, ease - 20);
         interval = Math.max(
             1,
-            (interval + delayedBeforeReviewDays / 4) * settings.lapsesIntervalChange,
+            (interval + delayedBeforeReviewDays / 4) * settings.defaultIntervalChange,
         );
     } else if (response === ReviewResponse.Again) {
         ease = Math.max(130, ease - 20);
@@ -151,16 +151,11 @@ export class SRAlgorithmOsr {
 
     static readonly initialInterval: number = 1.0;
 
-    cardGetResetSchedule(): RepItemScheduleInfoOsr {
-        // used after Again → OK: schedule the card 1 day out so it doesn't
-        // resurface in today's session or the next fresh session.
-        const dueDate = globalDateProvider.today.clone().add(SRAlgorithmOsr.initialInterval, "d");
-        return new RepItemScheduleInfoOsr(
-            dueDate,
-            SRAlgorithmOsr.initialInterval,
-            this.settings.baseEase,
-            0,
-        );
+    cardGetResetSchedule(oldSchedule: RepItemScheduleInfoOsr | null): RepItemScheduleInfoOsr {
+        const oldInterval = oldSchedule?.interval ?? SRAlgorithmOsr.initialInterval;
+        const interval = Math.max(1, Math.round(oldInterval * this.settings.lapsesIntervalChange * 10) / 10);
+        const dueDate = globalDateProvider.today.clone().add(interval, "d");
+        return new RepItemScheduleInfoOsr(dueDate, interval, this.settings.baseEase, 0);
     }
 
     cardGetNewSchedule(

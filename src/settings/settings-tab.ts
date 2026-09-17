@@ -38,7 +38,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         const s = this.plugin.data.settings;
 
         const builtAt = this.plugin.histogramStore.getBuiltAt();
-        const builtAtStr = builtAt ? new Date(builtAt).toLocaleString() : "never — rebuild recommended";
+        const builtAtStr = builtAt ? new Date(builtAt).toLocaleString() : "never. A rebuild is recommended";
 
         return [
             // Decks
@@ -48,11 +48,11 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 items: [
                     {
                         name: "Root deck tags",
-                        desc: "One tag per line. (e.g. #español) Card definitions in notes located under these tags are included. Specifying a tag will include all of its subdecks. (e.g. defining #español will include all words defined under tag patterns #español, #español/...,  #español/.../..., etc. (e.g. #español/palabras-clave,  #español/verbos)",
+                        desc: "One tag per line. Card definitions in notes located under the defined tags are included in the deck. Declaring a tag will include all of its subdecks.\n\nExample: Defining the base tag #español will include all tags with a path-like name #español/... For example #español/palabras-clave, #español/verbos, and #español/2026/09.",
                         control: {
                             type: "textarea",
                             key: "rootDeckTagsStr",
-                            placeholder: "#español\n#deutsch",
+                            placeholder: "#español\n#polski\n#slovenčina",
                             rows: 4,
                         },
                     },
@@ -63,7 +63,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             {
                 type: "list",
                 heading: "Card types",
-                desc: "Keys are used in card syntax (e.g. =n for noun). Define colors to differentiate types visually",
+                desc: "Keys are used in the '=' operator card definition syntax: =key",
                 emptyState: "No card types yet.",
                 items: s.cardTypes.map((_tc, i) => ({
                     name: "",
@@ -120,7 +120,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 items: [
                     {
                         name: "Show interval on buttons",
-                        desc: "Display the resulting interval (e.g. 4d) on Okay/Good buttons during review.",
+                        desc: "Display a preview of the resulting interval on buttons during review. e.g. '4d', '1d', '3.5m'",
                         control: {
                             type: "toggle",
                             key: "showIntervalOnButtons",
@@ -136,7 +136,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 items: [
                     {
                         name: "Word count",
-                        desc: "Number of words shown per sentence.",
+                        desc: "Number of words chosen per sentence.",
                         control: {
                             type: "slider",
                             key: "sentenceBuilderWordCount",
@@ -147,11 +147,11 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Word selection method",
-                        desc: "Random: random draw from selected deck. Optimised: assures, that the selection contains an even mix of older and newer cards.",
+                        desc: "Optimised: assures that the selection contains an even mix of older and newer cards.\n\nRandom: arbitrary random draw",
                         control: {
                             type: "dropdown",
                             key: "sentenceBuilderSelection",
-                            options: { Random: "Random", Optimised: "Optimised" },
+                            options: { Optimised: "Optimised", Random: "Random" },
                         },
                     },
                 ],
@@ -169,9 +169,9 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             const cur = this.plugin.data.settings;
                             cur.baseEase = d.baseEase;
                             cur.easyBonus = d.easyBonus;
+                            cur.defaultIntervalChange = d.defaultIntervalChange;
                             cur.lapsesIntervalChange = d.lapsesIntervalChange;
                             cur.maximumInterval = d.maximumInterval;
-                            cur.maxLinkFactor = d.maxLinkFactor;
                             cur.loadBalance = d.loadBalance;
                             cur.startOfDay = d.startOfDay;
                             void this.plugin.saveData_();
@@ -179,33 +179,33 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         },
                     },
                     {
-                        name: "Base ease (%)",
-                        desc: "Starting ease factor for new cards.",
-                        control: { type: "slider", key: "baseEase", min: 130, max: 400, step: 10 },
+                        name: "Base ease",
+                        desc: "Default ease factor for new cards.",
+                        control: { type: "slider", key: "baseEase", min: 100, max: 400, step: 10 },
                     },
                     {
-                        name: "Easy bonus",
-                        desc: "Multiplier applied to interval on an Easy response.",
+                        name: "Good bonus",
+                        desc: "Interval multiplier applied to cards reviewed as 'Good'",
                         control: { type: "slider", key: "easyBonus", min: 1.0, max: 2.0, step: 0.05 },
                     },
                     {
+                        name: "Okay interval change",
+                        desc: "Interval multiplier applied to cards reviewed as 'Okay'",
+                        control: { type: "slider", key: "defaultIntervalChange", min: 1.0, max: 1.8, step: 0.05 },
+                    },
+                    {
                         name: "Lapse interval change",
-                        desc: "Interval multiplier after a lapse (Again).",
+                        desc: "Interval multiplier applied to cards reviewed as 'Okay' after they were reshuffled into the session due to being toggled as 'Again'. The default value resets the card's progress completely.",
                         control: { type: "slider", key: "lapsesIntervalChange", min: 0.01, max: 1.0, step: 0.01 },
                     },
                     {
-                        name: "Maximum interval (days)",
+                        name: "Maximum interval",
                         desc: "Cards will not be scheduled beyond this many days.",
                         control: { type: "slider", key: "maximumInterval", min: 7, max: 36525, step: 1 },
                     },
                     {
-                        name: "Max link factor",
-                        desc: "Weight given to the linked note's ease during scheduling.",
-                        control: { type: "slider", key: "maxLinkFactor", min: 0, max: 1.0, step: 0.05 },
-                    },
-                    {
                         name: "Start of day",
-                        desc: "Cards whose due date is today only become available after this time. Set to e.g. 04:00:00 if you study past midnight and want yesterday's cards to stay due until then (HH:MM:SS).",
+                        desc: "Cards whose due date is today only become available after this time. Set to e.g. 02:00:00 if you study past midnight and want yesterday's cards to stay due until then. Format: HH:MM:SS.",
                         control: {
                             type: "text",
                             key: "startOfDay",
@@ -223,12 +223,12 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 items: [
                     {
                         name: "Enable Load Balancing",
-                        desc: "Spread cards across nearby days to avoid review spikes.",
+                        desc: "Uses a histogram to spread cards across nearby days to avoid review spikes.",
                         control: { type: "toggle", key: "loadBalance" },
                     },
                     {
                         name: "Rebuild histogram",
-                        desc: `Rescans every note in the vault. Takes a few seconds. Last full rebuild: ${builtAtStr}.`,
+                        desc: `Rescans every note in the vault. Takes a few seconds.\n\nLast full rebuild: ${builtAtStr}.`,
                         action: (): void => {
                             void (async () => {
                                 try {
