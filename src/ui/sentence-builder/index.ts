@@ -1,4 +1,4 @@
-import { App, Modal, setIcon } from "obsidian";
+import { App, Modal, Platform, setIcon } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { buildDeckTree, flattenDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
@@ -135,7 +135,9 @@ export class SentenceBuilderModal extends Modal {
         onClick: () => void,
     ): void {
         const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+        if (Platform.isDesktop && this.plugin.data.settings.showKeybindingsOnDesktop) {
+            btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+        }
         setIcon(btn.createSpan({ cls: "ef-btn-icon" }), icon);
         btn.createSpan({ text: label, cls: "ef-btn-label" });
         btn.addEventListener("click", onClick);

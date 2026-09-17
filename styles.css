@@ -135,7 +135,11 @@
 .ef-btn-label    { font-weight: 600; font-size: 0.95em; }
 .ef-btn-interval { font-size: 0.72em; opacity: 0.85; }
 
-/* Keyboard-shortcut badge shown at the top-left of each response button. */
+/* Keyboard-shortcut badge. Hidden on mobile/tablet unconditionally. */
+@media (max-width: 768px) {
+    .ef-btn-key { display: none !important; }
+}
+
 .ef-btn-key {
     display: inline-flex;
     align-items: center;

@@ -1,4 +1,4 @@
-import { App, Modal, setIcon } from "obsidian";
+import { App, Modal, Platform, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
@@ -325,7 +325,9 @@ export class ReviewModal extends Modal {
         onClick: () => void,
     ): void {
         const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+        if (Platform.isDesktop && this.plugin.data.settings.showKeybindingsOnDesktop) {
+            btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+        }
         const iconEl = btn.createSpan({ cls: "ef-btn-icon" });
         setIcon(iconEl, icon);
         const textEl = btn.createSpan({ cls: "ef-btn-text" });

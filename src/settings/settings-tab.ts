@@ -126,6 +126,14 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             key: "showIntervalOnButtons",
                         },
                     },
+                    {
+                        name: "Show keybindings on desktop",
+                        desc: "Show the keyboard shortcut number on each review button (1, 2, 3). Keybindings remain functional regardless of visibility. Always hidden on mobile device.",
+                        control: {
+                            type: "toggle",
+                            key: "showKeybindingsOnDesktop",
+                        },
+                    },
                 ],
             },
 

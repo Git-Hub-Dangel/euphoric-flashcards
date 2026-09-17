@@ -27,6 +27,7 @@ export interface EuphoricSettings {
     // Review
     defaultCardSide: CardSide;
     showIntervalOnButtons: boolean;
+    showKeybindingsOnDesktop: boolean;
 
     // Sentence Builder
     defaultSentenceBuilderSide: CardSide;
@@ -55,6 +56,7 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
 
     defaultCardSide: "Shuffle",
     showIntervalOnButtons: true,
+    showKeybindingsOnDesktop: true,
 
     defaultSentenceBuilderSide: "Shuffle",
     sentenceBuilderWordCount: 4,
