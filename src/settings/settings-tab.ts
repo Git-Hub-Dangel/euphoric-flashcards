@@ -41,6 +41,24 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         const builtAtStr = builtAt ? new Date(builtAt).toLocaleString() : "never. A rebuild is recommended";
 
         return [
+            // Info
+            {
+                type: "group",
+                heading: "Resources for Euphoric Flashcards",
+                items: [
+                    {
+                        name: "",
+                        desc: "Open the official introductory follow-along guide to Euphoric Flashcards. There, you'll also find links to the repo. ",
+                        render: (setting: Setting): void => {
+                            setting.addButton(btn => {
+                                btn.setButtonText("Open Guide")
+                                    .onClick(() => { window.open("https://www.jrdk.de/projects/euphoric-flashcards", "_blank"); });
+                            });
+                        },
+                    },
+                ],
+            },
+
             // Decks
             {
                 type: "group",
