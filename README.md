@@ -1,4 +1,4 @@
-![euphoric-flashcards-logo-banner](/assets/images/euphoric-flashcards-logo.png)
+![euphoric-flashcards-logo-banner](/assets/images/euphoric-flashcards-banner.png)
 
 # Euphoric Flashcards
 
@@ -21,6 +21,10 @@ Euphoric Flashcards refines spaced repetition with features I found missing, or 
 * Native two-way card reviews
 * A Sentence Builder review mode, for practicing deliberate sentence construction with your own flashcards
 * An Anki-like spaced-repetition algorithm with load balancing
+
+>[!WARNING] THIS GUIDE IS BEING MOVED
+> 
+> It will be available [here](https://www.jrdk.de/projects/euphoric-flashcards)
 
 [This is a preview video demonstrating the syntax and UI](https://www.jrdk.de/notes/euphoric-flashcards#syntax-reference-video) 
 ## 🧭 Where to?
