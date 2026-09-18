@@ -23,8 +23,7 @@ Euphoric Flashcards refines spaced repetition with features I found missing, or 
 * An Anki-like spaced-repetition algorithm with load balancing
 
 >[!WARNING] THIS GUIDE IS BEING MOVED
-> 
-> It will be available [here](https://www.jrdk.de/projects/euphoric-flashcards)
+> The below guide is being rewritten into a short follow-along getting-started guide on [its dedicated webpagee](https://www.jrdk.de/projects/euphoric-flashcards). Once complete, it will be removed from here.
 
 [This is a preview video demonstrating the syntax and UI](https://www.jrdk.de/notes/euphoric-flashcards#syntax-reference-video) 
 ## 🧭 Where to?
