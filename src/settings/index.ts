@@ -8,6 +8,11 @@ export interface TypeConfig {
     color: string;
 }
 
+export interface ConstructionConstraintCollection {
+    labels: string[];
+    deckTags: string[];
+}
+
 export interface EuphoricSettings {
     // Decks
     rootDeckTags: string[];
@@ -33,6 +38,8 @@ export interface EuphoricSettings {
     defaultConjureSentencesSide: CardSide;
     conjureSentencesWordCount: number;
     conjureSentencesSelection: WordSelection;
+    enableConstructionConstraints: boolean;
+    constructionConstraints: ConstructionConstraintCollection[];
 }
 
 export const DEFAULT_SETTINGS: EuphoricSettings = {
@@ -59,6 +66,8 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     showKeybindingsOnDesktop: true,
 
     defaultConjureSentencesSide: "Shuffle",
-    conjureSentencesWordCount: 4,
+    conjureSentencesWordCount: 3,
     conjureSentencesSelection: "Optimised",
+    enableConstructionConstraints: false,
+    constructionConstraints: [],
 };

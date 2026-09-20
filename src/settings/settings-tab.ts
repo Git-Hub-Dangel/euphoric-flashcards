@@ -1,7 +1,7 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type { SettingDefinitionItem } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
-import type { TypeConfig } from "src/settings/index";
+import type { ConstructionConstraintCollection, TypeConfig } from "src/settings/index";
 import { DEFAULT_SETTINGS } from "src/settings/index";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
@@ -180,7 +180,66 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             options: { Optimised: "Optimised", Random: "Random" },
                         },
                     },
+                    {
+                        name: "Enable construction constraints",
+                        desc: "When on, each Conjure Sentences session shows a random construction constraint at the top, drawn from collections bound to the current source deck.",
+                        control: {
+                            type: "toggle",
+                            key: "enableConstructionConstraints",
+                        },
+                    },
                 ],
+            },
+
+            // Construction Constraints
+            {
+                type: "list",
+                heading: "Construction Constraints",
+                desc: "Each collection defines constraint labels (left) and the source-deck tags they apply to (right). Entries are separated by newlines.",
+                emptyState: "No construction constraint collections yet. Construction constraints are additional notices that instruct you to use a particular tense, case or syntax when conjuring sentences.",
+                items: s.constructionConstraints.map((_cc, i) => ({
+                    name: "",
+                    render: (setting: Setting): void => {
+                        const cc = this.plugin.data.settings.constructionConstraints[i] as ConstructionConstraintCollection;
+                        setting
+                            .addTextArea(ta => {
+                                ta.setPlaceholder("constraints e.g.\nPresent\nPreterite\nImperfect\nFuture\nConditional\nSubjunctive");
+                                ta.setValue(cc.labels.join("\n"));
+                                ta.inputEl.addClass("ef-cc-labels-input");
+                                ta.inputEl.rows = 4;
+                                ta.onChange(v => {
+                                    (this.plugin.data.settings.constructionConstraints[i] as ConstructionConstraintCollection).labels =
+                                        v.split("\n").map(x => x.trim()).filter(x => x.length > 0);
+                                    void this.plugin.saveData_();
+                                });
+                            })
+                            .addTextArea(ta => {
+                                ta.setPlaceholder("deck tags to apply these constraints to e.g.\n #español");
+                                ta.setValue(cc.deckTags.join("\n"));
+                                ta.inputEl.addClass("ef-cc-tags-input");
+                                ta.inputEl.rows = 4;
+                                ta.onChange(v => {
+                                    (this.plugin.data.settings.constructionConstraints[i] as ConstructionConstraintCollection).deckTags =
+                                        v.split("\n").map(x => x.trim().replace(/^#/, "")).filter(x => x.length > 0);
+                                    void this.plugin.saveData_();
+                                });
+                            });
+                        setting.settingEl.addClass("ef-cc-row");
+                    },
+                })),
+                onDelete: (i: number): void => {
+                    this.plugin.data.settings.constructionConstraints.splice(i, 1);
+                    void this.plugin.saveData_();
+                    this.update();
+                },
+                addItem: {
+                    name: "Add collection",
+                    action: (): void => {
+                        this.plugin.data.settings.constructionConstraints.push({ labels: [], deckTags: [] });
+                        void this.plugin.saveData_();
+                        this.update();
+                    },
+                },
             },
 
             // Scheduling

@@ -36,6 +36,7 @@ export class ConjureSentencesModal extends Modal {
 
     private allCards: ReviewCard[] = [];
     private wordListEl: HTMLElement | null = null;
+    private constraintPool: string[] = [];
 
     constructor(
         app: App,
@@ -102,9 +103,26 @@ export class ConjureSentencesModal extends Modal {
         }
 
         this.allCards = await loadCardsForDeck(this.app.vault, selectionNode, rootTags);
+        this.constraintPool = this.buildConstraintPool();
         this.contentEl.empty();
         this.buildLayout();
         this.drawWords();
+    }
+
+    private buildConstraintPool(): string[] {
+        const settings = this.plugin.data.settings;
+        if (!settings.enableConstructionConstraints) return [];
+        const target = this.options.selectionDeckTag.replace(/^#/, "").toLowerCase();
+        const pool: string[] = [];
+        for (const cc of settings.constructionConstraints) {
+            const match = cc.deckTags.some(t => {
+                const bound = t.replace(/^#/, "").toLowerCase();
+                if (bound.length === 0) return false;
+                return target === bound || target.startsWith(bound + "/");
+            });
+            if (match) pool.push(...cc.labels);
+        }
+        return pool;
     }
 
     private buildLayout(): void {
@@ -151,6 +169,13 @@ export class ConjureSentencesModal extends Modal {
         if (words.length === 0) {
             this.wordListEl.createEl("p", { text: "No cards in selection deck.", cls: "ef-loading" });
             return;
+        }
+
+        const label = this.constraintPool[Math.floor(Math.random() * this.constraintPool.length)];
+        if (label !== undefined) {
+            this.wordListEl.createDiv({ cls: "ef-cc-pill-wrap" }, wrap => {
+                wrap.createSpan({ text: label, cls: "ef-cc-pill" });
+            });
         }
 
         for (const item of words) {
