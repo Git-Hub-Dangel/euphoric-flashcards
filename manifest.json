@@ -1,7 +1,7 @@
 {
     "id": "euphoric-flashcards",
     "name": "Euphoric Flashcards",
-    "version": "1.2.1",
+    "version": "1.3.0",
     "minAppVersion": "1.13.0",
     "description": "Make flashcards enchanting. A minimal and engaging spaced-repetition system that trains you on applying, not only memorising your flashcards. Locally and offline.",
     "author": "Daniel Khansa",
