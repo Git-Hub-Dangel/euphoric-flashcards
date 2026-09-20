@@ -824,15 +824,19 @@
     to   { opacity: 1; }
 }
 
-/* Base stagger multiplier lives on :root so per-surface overrides (below) can
-   raise or lower it without the .ef-anim-in rule declaring its own value —
+/* Base defaults live on :root so per-surface overrides can raise or lower
+   them via inheritance without .ef-anim-in declaring its own value —
    direct declarations on the animated element itself would out-cascade any
-   ancestor override. */
-:root { --ef-stagger-mult: 1; }
+   ancestor override. --ef-anim-preroll is bumped by applyAnimationDuration
+   on mobile to wait out Obsidian's slide-up modal transition. */
+:root {
+    --ef-stagger-mult: 1;
+    --ef-anim-preroll: 0ms;
+}
 
 .ef-anim-in {
     animation: ef-rise-in var(--ef-anim-dur) cubic-bezier(0.22, 1, 0.36, 1) backwards;
-    animation-delay: calc(var(--ef-stagger-delay) * var(--ef-stagger-mult));
+    animation-delay: calc(var(--ef-anim-preroll) + var(--ef-stagger-delay) * var(--ef-stagger-mult));
     will-change: opacity, transform;
 }
 

@@ -123,6 +123,10 @@ export class ReviewModal extends Modal {
     private fileCache = new Map<string, string>();
     private keymapHandlers: KeymapEventHandler[] = [];
     private againItems = new Set<ReviewItem>();
+    // True until the first card has been rendered — used to stagger the
+    // header and action row exactly once on modal open, matching how
+    // Conjure Sentences animates its permanent chrome.
+    private firstRender = true;
 
     constructor(
         app: App,
@@ -215,10 +219,11 @@ export class ReviewModal extends Modal {
         const reveal = cardReveal(item.card);
         const settings = this.plugin.data.settings;
 
-        // Header — the container itself is not animated so the border-bottom
-        // guideline stays static between cards. The progress counter still
-        // gets a subtle flash whenever it re-renders (see .ef-progress-flash).
-        this.contentEl.createDiv({ cls: "ef-review-header" }, h => {
+        // Header — animated only on the modal's very first render (parallel to
+        // Conjure Sentences' permanent chrome). Between card advances it stays
+        // static so its border-bottom guideline doesn't flicker; the progress
+        // counter inside still flashes on every re-render.
+        const headerEl = this.contentEl.createDiv({ cls: "ef-review-header" }, h => {
             h.createSpan({ text: this.node.fullPath, cls: "ef-review-deck-name" });
             const right = h.createDiv({ cls: "ef-review-header-right" });
             const editBtn = right.createEl("button", { cls: "ef-edit-btn", attr: { "aria-label": "Edit card" } });
@@ -226,12 +231,13 @@ export class ReviewModal extends Modal {
             editBtn.addEventListener("click", () => this.openEditCardModal(item));
             right.createSpan({ text: `${this.reviewed} / ${this.totalCards - this.reviewed}`, cls: "ef-review-progress ef-progress-flash" });
         });
+        if (this.firstRender) staggerIn(headerEl, 0);
 
         // Card body
         const body = this.contentEl.createDiv({ cls: "ef-card-body" });
 
         const promptEl = body.createDiv({ text: face.prompt, cls: "ef-card-prompt" });
-        staggerIn(promptEl, 0);
+        staggerIn(promptEl, this.firstRender ? 1 : 0);
 
         // Answer (hidden until revealed)
         const answerEl = body.createDiv({ cls: "ef-answer ef-hidden" });
@@ -259,11 +265,13 @@ export class ReviewModal extends Modal {
             }
         }
 
-        // Actions — the container is not animated so its border-top guideline
-        // stays static; individual buttons inside still fade in.
+        // Actions — the container animates on first render only; on later
+        // renders its border-top guideline stays static. Buttons inside always
+        // stagger in.
         const actions = this.contentEl.createDiv({ cls: "ef-review-actions" });
+        if (this.firstRender) staggerIn(actions, 2);
         const showBtn = actions.createEl("button", { text: "Show Answer", cls: "ef-btn ef-btn-primary" });
-        staggerIn(showBtn, 1);
+        staggerIn(showBtn, this.firstRender ? 3 : 1);
         const doReveal = (): void => {
             if (this.revealed) return;
             this.revealed = true;
@@ -276,6 +284,8 @@ export class ReviewModal extends Modal {
         showBtn.addEventListener("click", doReveal);
         this.addKey(" ", doReveal);
         this.addKey("Enter", doReveal);
+
+        this.firstRender = false;
     }
 
     private renderResponseButtons(

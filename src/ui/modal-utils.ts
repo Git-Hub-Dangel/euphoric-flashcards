@@ -1,4 +1,4 @@
-import { Modal, setIcon } from "obsidian";
+import { Modal, Platform, setIcon } from "obsidian";
 
 // custom close button pinned top-right of the modal, mirroring `.ef-back-btn`.
 // obsidian's native `.modal-close-button` sits under the iOS notch on
@@ -39,6 +39,12 @@ export function applyAnimationDuration(containerEl: HTMLElement, ms: number): vo
         return;
     }
     containerEl.style.setProperty("--ef-anim-dur", `${ms}ms`);
+    // On mobile, Obsidian slides the modal up from the bottom over ~200 ms.
+    // Offset every stagger by a pre-roll so our fade-ins wait for the modal
+    // to settle instead of firing during the slide.
+    if (Platform.isMobile) {
+        containerEl.style.setProperty("--ef-anim-preroll", "300ms");
+    }
 }
 
 // Marks an element to fade-and-rise on next paint. `index` picks one of the
