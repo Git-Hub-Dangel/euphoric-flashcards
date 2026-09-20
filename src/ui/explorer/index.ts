@@ -4,7 +4,7 @@ import { buildDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { ReviewModal } from "src/ui/review/index";
 import { ConjureSentencesModal } from "src/ui/conjure-sentences/index";
-import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import type { CardSide, WordSelection, ReviewMode } from "src/settings";
 
 export class ExplorerModal extends Modal {
@@ -54,8 +54,8 @@ export class ExplorerModal extends Modal {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
+        applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
         this.contentEl.addClass("ef-explorer");
-        this.contentEl.createEl("p", { text: "Loading decks…", cls: "ef-loading" });
         this.load().catch(err => {
             console.error("EuphoricFlashcards ExplorerModal:", err);
             this.contentEl.empty();
@@ -98,15 +98,16 @@ export class ExplorerModal extends Modal {
         }
 
         // ── Header ──────────────────────────────────────────────────────────
-        this.contentEl.createDiv({ cls: "ef-explorer-header" }, h => {
+        const headerEl = this.contentEl.createDiv({ cls: "ef-explorer-header" }, h => {
             const titleEl = h.createDiv({ cls: "ef-explorer-title" });
             const iconEl = titleEl.createSpan({ cls: "ef-explorer-icon" });
             setIcon(iconEl, "layers");
             titleEl.createSpan({ text: "Review" });
         });
+        staggerIn(headerEl, 0);
 
         // ── Review Settings ──────────────────────────────────────────────────
-        this.contentEl.createDiv({ cls: "ef-review-settings" }, section => {
+        const settingsEl = this.contentEl.createDiv({ cls: "ef-review-settings" }, section => {
             section.createDiv({ text: "Review Settings", cls: "ef-settings-heading" });
 
             section.createDiv({ cls: "ef-settings-row" }, row => {
@@ -131,15 +132,18 @@ export class ExplorerModal extends Modal {
 
             this.settingsPanelEl = section.createDiv({ cls: "ef-settings-panel" });
         });
+        staggerIn(settingsEl, 1);
 
         this.renderSettingsPanel();
 
         // ── Deck list ────────────────────────────────────────────────────────
         this.roots = [...tree.values()].filter(n => n.stats.total > 0);
 
-        this.contentEl.createDiv({ text: "Decks", cls: "ef-section-title" });
+        const sectionTitle = this.contentEl.createDiv({ text: "Decks", cls: "ef-section-title" });
+        staggerIn(sectionTitle, 2);
 
         const wrap = this.contentEl.createDiv({ cls: "ef-deck-list-wrap" });
+        staggerIn(wrap, 3);
 
         // Sticky header row with column labels
         wrap.createDiv({ cls: "ef-deck-header" }, h => {
@@ -151,14 +155,21 @@ export class ExplorerModal extends Modal {
         });
 
         this.deckListEl = wrap.createDiv({ cls: "ef-deck-list" });
-        this.renderDeckList();
+        // Initial render: animate every row, continuing the header stagger.
+        this.renderDeckList(null, 4);
     }
 
-    private renderDeckList(): void {
+    // `animateFromTag` scopes the fade-in to rows freshly revealed by
+    // expanding that node — its own row and existing siblings render
+    // instantly, only strict descendants animate. `null` = animate the whole
+    // list (used on initial open and back-navigation).
+    private renderDeckList(animateFromTag: string | null = null, baseIndex = 0): void {
         if (!this.deckListEl) return;
         this.deckListEl.empty();
+        const counter = { i: baseIndex };
+        const animateAll = animateFromTag === null;
         for (const root of this.roots) {
-            this.renderNode(this.deckListEl, root, 0);
+            this.renderNode(this.deckListEl, root, 0, counter, animateAll, animateFromTag);
         }
     }
 
@@ -198,7 +209,14 @@ export class ExplorerModal extends Modal {
         });
     }
 
-    private renderNode(container: HTMLElement, node: DeckNode, depth: number): void {
+    private renderNode(
+        container: HTMLElement,
+        node: DeckNode,
+        depth: number,
+        counter: { i: number },
+        animate: boolean,
+        animateFromTag: string | null,
+    ): void {
         if (node.stats.total === 0) return;
 
         const { total, due, new: newCards } = node.stats;
@@ -208,6 +226,7 @@ export class ExplorerModal extends Modal {
         const isExpanded = this.expanded.has(node.tag);
 
         const row = container.createDiv({ cls: "ef-deck-row" });
+        if (animate) staggerIn(row, counter.i++);
 
         // Name cell: indent + chevron + name
         const nameCell = row.createDiv({ cls: "ef-deck-name-cell" });
@@ -215,15 +234,19 @@ export class ExplorerModal extends Modal {
 
         const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
         if (hasChildren) {
-            setIcon(chevron, isExpanded ? "chevron-down" : "chevron-right");
+            setIcon(chevron, "chevron-right");
             chevron.addClass("ef-deck-chevron-active");
+            if (isExpanded) chevron.addClass("is-open");
             chevron.addEventListener("click", e => {
                 e.stopPropagation();
                 if (isExpanded) this.expanded.delete(node.tag);
                 else this.expanded.add(node.tag);
                 this.plugin.data.expandedDecks = [...this.expanded];
                 void this.plugin.saveData_();
-                this.renderDeckList();
+                // Passing this node's tag scopes animation to freshly-revealed
+                // descendants; on collapse `isExpanded` is now false so no
+                // children are rendered and nothing animates.
+                this.renderDeckList(node.tag);
             });
         }
 
@@ -237,14 +260,21 @@ export class ExplorerModal extends Modal {
         row.addEventListener("click", () => this.launchMode(node));
 
         if (isExpanded) {
+            const childAnimate = animate || (animateFromTag !== null && node.tag === animateFromTag);
             for (const child of children) {
-                this.renderNode(container, child, depth + 1);
+                this.renderNode(container, child, depth + 1, counter, childAnimate, animateFromTag);
             }
         }
     }
 
     private launchMode(node: DeckNode): void {
-        this.close();
+        fadeOutThen(this, () => {
+            this.close();
+            this.openTargetModal(node);
+        });
+    }
+
+    private openTargetModal(node: DeckNode): void {
         if (this.mode === "ConjureSentences") {
             new ConjureSentencesModal(this.app, this.plugin, node, {
                 cardSide: this.csSide,

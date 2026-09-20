@@ -8,7 +8,7 @@ import { frontFace, backFace, cardReveal } from "src/parsing";
 import type { ParsedCard } from "src/parsing";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -53,9 +53,9 @@ export class ConjureSentencesModal extends Modal {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
+        applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
         this.contentEl.addClass("ef-conjure-sentences");
         this.addBackButton();
-        this.contentEl.createEl("p", { text: "Loading…", cls: "ef-loading" });
         this.load().catch(err => {
             console.error("EuphoricFlashcards ConjureSentencesModal:", err);
             this.contentEl.empty();
@@ -74,8 +74,10 @@ export class ConjureSentencesModal extends Modal {
         });
         setIcon(btn, "arrow-left");
         btn.addEventListener("click", () => {
-            this.close();
-            new ExplorerModal(this.app, this.plugin).open();
+            fadeOutThen(this, () => {
+                this.close();
+                new ExplorerModal(this.app, this.plugin).open();
+            });
         });
     }
 
@@ -126,19 +128,21 @@ export class ConjureSentencesModal extends Modal {
     }
 
     private buildLayout(): void {
-        this.contentEl.createDiv({ cls: "ef-cs-header" }, h => {
+        const headerEl = this.contentEl.createDiv({ cls: "ef-cs-header" }, h => {
             const titleEl = h.createDiv({ cls: "ef-cs-title" });
             const iconEl = titleEl.createSpan({ cls: "ef-cs-icon" });
             setIcon(iconEl, "book-open");
             titleEl.createSpan({ text: "Conjure Sentences" });
         });
+        staggerIn(headerEl, 0);
 
         this.wordListEl = this.contentEl.createDiv({ cls: "ef-cs-word-list" });
 
-        this.contentEl.createDiv({ cls: "ef-cs-footer" }, footer => {
+        const footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" }, footer => {
             this.addFooterButton(footer, 1, "Regenerate", "refresh-cw", "ef-btn-regen", () => this.drawWords());
             this.addFooterButton(footer, 2, "Good", "check", "ef-btn-good", () => this.drawWords());
         });
+        staggerIn(footerEl, 1);
 
         this.scope.register([], "1", () => { this.drawWords(); return false; });
         this.scope.register([], "2", () => { this.drawWords(); return false; });
@@ -163,23 +167,38 @@ export class ConjureSentencesModal extends Modal {
 
     private drawWords(): void {
         if (!this.wordListEl) return;
+        const wordListEl = this.wordListEl;
+        const existingPill = wordListEl.querySelector<HTMLElement>(".ef-cc-pill");
+        const doDraw = (): void => this.renderDraw(wordListEl);
+        if (existingPill && this.plugin.data.settings.animationDurationMs > 0) {
+            existingPill.addClass("ef-fading");
+            window.setTimeout(doDraw, 100);
+        } else {
+            doDraw();
+        }
+    }
+
+    private renderDraw(wordListEl: HTMLElement): void {
         const words = this.selectWords();
-        this.wordListEl.empty();
+        wordListEl.empty();
 
         if (words.length === 0) {
-            this.wordListEl.createEl("p", { text: "No cards in selection deck.", cls: "ef-loading" });
+            wordListEl.createEl("p", { text: "No cards in selection deck.", cls: "ef-loading" });
             return;
         }
 
+        let idx = 0;
         const label = this.constraintPool[Math.floor(Math.random() * this.constraintPool.length)];
         if (label !== undefined) {
-            this.wordListEl.createDiv({ cls: "ef-cc-pill-wrap" }, wrap => {
+            const pillWrap = wordListEl.createDiv({ cls: "ef-cc-pill-wrap" }, wrap => {
                 wrap.createSpan({ text: label, cls: "ef-cc-pill" });
             });
+            staggerIn(pillWrap, idx++);
         }
 
         for (const item of words) {
-            this.renderWordItem(this.wordListEl, item);
+            const row = this.renderWordItem(wordListEl, item);
+            staggerIn(row, idx++);
         }
     }
 
@@ -226,7 +245,7 @@ export class ConjureSentencesModal extends Modal {
             .map(toWordItem);
     }
 
-    private renderWordItem(container: HTMLElement, item: WordItem): void {
+    private renderWordItem(container: HTMLElement, item: WordItem): HTMLElement {
         const settings = this.plugin.data.settings;
         const face = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
         const reveal = cardReveal(item.card);
@@ -269,6 +288,9 @@ export class ConjureSentencesModal extends Modal {
             const isHidden = revealArea.hasClass("ef-hidden");
             revealArea.toggleClass("ef-hidden", !isHidden);
             setIcon(revealBtnIcon, isHidden ? "eye-off" : "eye");
+            if (isHidden) staggerIn(revealArea, 0);
         });
+
+        return row;
     }
 }

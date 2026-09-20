@@ -329,6 +329,19 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                 ],
             },
+
+            // Appearance
+            {
+                type: "group",
+                heading: "Appearance",
+                items: [
+                    {
+                        name: "Animation duration",
+                        desc: "Duration in milliseconds for subtle animations throughout Euphoric Flashcards' features. Set to 0 to disable all animations. Respects reduced motion.",
+                        control: { type: "slider", key: "animationDurationMs", min: 0, max: 500, step: 10 },
+                    },
+                ],
+            },
         ];
     }
 }
