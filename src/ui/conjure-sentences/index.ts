@@ -10,7 +10,7 @@ import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
 
-export interface SentenceBuilderOptions {
+export interface ConjureSentencesOptions {
     cardSide: CardSide;
     wordCount: number;
     wordSelection: WordSelection;
@@ -30,9 +30,9 @@ function fisherYates<T>(arr: T[]): T[] {
     return arr;
 }
 
-export class SentenceBuilderModal extends Modal {
+export class ConjureSentencesModal extends Modal {
     private readonly plugin: EuphoricFlashcardsPlugin;
-    private readonly options: SentenceBuilderOptions;
+    private readonly options: ConjureSentencesOptions;
 
     private allCards: ReviewCard[] = [];
     private wordListEl: HTMLElement | null = null;
@@ -41,7 +41,7 @@ export class SentenceBuilderModal extends Modal {
         app: App,
         plugin: EuphoricFlashcardsPlugin,
         _node: DeckNode,
-        options: SentenceBuilderOptions,
+        options: ConjureSentencesOptions,
     ) {
         super(app);
         this.plugin = plugin;
@@ -52,11 +52,11 @@ export class SentenceBuilderModal extends Modal {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
-        this.contentEl.addClass("ef-sentence-builder");
+        this.contentEl.addClass("ef-conjure-sentences");
         this.addBackButton();
         this.contentEl.createEl("p", { text: "Loading…", cls: "ef-loading" });
         this.load().catch(err => {
-            console.error("EuphoricFlashcards SentenceBuilderModal:", err);
+            console.error("EuphoricFlashcards ConjureSentencesModal:", err);
             this.contentEl.empty();
             this.contentEl.createEl("p", { text: "Failed to load cards." });
         });
@@ -108,16 +108,16 @@ export class SentenceBuilderModal extends Modal {
     }
 
     private buildLayout(): void {
-        this.contentEl.createDiv({ cls: "ef-sb-header" }, h => {
-            const titleEl = h.createDiv({ cls: "ef-sb-title" });
-            const iconEl = titleEl.createSpan({ cls: "ef-sb-icon" });
+        this.contentEl.createDiv({ cls: "ef-cs-header" }, h => {
+            const titleEl = h.createDiv({ cls: "ef-cs-title" });
+            const iconEl = titleEl.createSpan({ cls: "ef-cs-icon" });
             setIcon(iconEl, "book-open");
-            titleEl.createSpan({ text: "Sentence Builder" });
+            titleEl.createSpan({ text: "Conjure Sentences" });
         });
 
-        this.wordListEl = this.contentEl.createDiv({ cls: "ef-sb-word-list" });
+        this.wordListEl = this.contentEl.createDiv({ cls: "ef-cs-word-list" });
 
-        this.contentEl.createDiv({ cls: "ef-sb-footer" }, footer => {
+        this.contentEl.createDiv({ cls: "ef-cs-footer" }, footer => {
             this.addFooterButton(footer, 1, "Regenerate", "refresh-cw", "ef-btn-regen", () => this.drawWords());
             this.addFooterButton(footer, 2, "Good", "check", "ef-btn-good", () => this.drawWords());
         });
@@ -206,20 +206,20 @@ export class SentenceBuilderModal extends Modal {
         const face = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
         const reveal = cardReveal(item.card);
 
-        const row = container.createDiv({ cls: "ef-sb-word-row" });
+        const row = container.createDiv({ cls: "ef-cs-word-row" });
 
-        const promptRow = row.createDiv({ cls: "ef-sb-prompt-row" });
-        promptRow.createSpan({ text: face.prompt, cls: "ef-sb-word-text" });
+        const promptRow = row.createDiv({ cls: "ef-cs-prompt-row" });
+        promptRow.createSpan({ text: face.prompt, cls: "ef-cs-word-text" });
 
-        const revealBtn = promptRow.createEl("button", { cls: "ef-btn ef-sb-reveal-btn" });
+        const revealBtn = promptRow.createEl("button", { cls: "ef-btn ef-cs-reveal-btn" });
         const revealBtnIcon = revealBtn.createSpan({ cls: "ef-btn-icon" });
         setIcon(revealBtnIcon, "eye");
         revealBtn.createSpan({ text: "Reveal" });
 
-        const revealArea = row.createDiv({ cls: "ef-sb-reveal-area ef-hidden" });
+        const revealArea = row.createDiv({ cls: "ef-cs-reveal-area ef-hidden" });
 
         revealArea.createDiv({ cls: "ef-card-answer-line" }, line => {
-            line.createSpan({ text: face.answer, cls: "ef-sb-word-answer" });
+            line.createSpan({ text: face.answer, cls: "ef-cs-word-answer" });
             if (reveal.type) {
                 const tc = settings.cardTypes.find(t => t.key === reveal.type);
                 const badge = line.createSpan({

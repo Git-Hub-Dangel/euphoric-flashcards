@@ -8,8 +8,8 @@ interface ExplorerState {
     mode: ReviewMode;
     reviewCardSide: CardSide;
     cramCardSide: CardSide;
-    sentenceBuilderCardSide: CardSide;
-    sentenceBuilderSelection: WordSelection;
+    conjureSentencesCardSide: CardSide;
+    conjureSentencesSelection: WordSelection;
 }
 
 interface PluginData {

@@ -3,7 +3,7 @@ import type EuphoricFlashcardsPlugin from "src/main";
 import { buildDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { ReviewModal } from "src/ui/review/index";
-import { SentenceBuilderModal } from "src/ui/sentence-builder/index";
+import { ConjureSentencesModal } from "src/ui/conjure-sentences/index";
 import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
 import type { CardSide, WordSelection, ReviewMode } from "src/settings";
 
@@ -14,7 +14,7 @@ export class ExplorerModal extends Modal {
     private mode: ReviewMode;
     private cardSide: CardSide;
     private cramSide: CardSide;
-    private sbSide: CardSide;
+    private csSide: CardSide;
     private wordCount: number;
     private wordSelection: WordSelection;
     private roots: DeckNode[] = [];
@@ -34,9 +34,9 @@ export class ExplorerModal extends Modal {
         this.mode = saved?.mode ?? "Review";
         this.cardSide = saved?.reviewCardSide ?? settings.defaultCardSide;
         this.cramSide = saved?.cramCardSide ?? settings.defaultCardSide;
-        this.sbSide = saved?.sentenceBuilderCardSide ?? settings.defaultSentenceBuilderSide;
-        this.wordSelection = saved?.sentenceBuilderSelection ?? settings.sentenceBuilderSelection;
-        this.wordCount = settings.sentenceBuilderWordCount;
+        this.csSide = saved?.conjureSentencesCardSide ?? settings.defaultConjureSentencesSide;
+        this.wordSelection = saved?.conjureSentencesSelection ?? settings.conjureSentencesSelection;
+        this.wordCount = settings.conjureSentencesWordCount;
     }
 
     private persistState(): void {
@@ -44,8 +44,8 @@ export class ExplorerModal extends Modal {
             mode: this.mode,
             reviewCardSide: this.cardSide,
             cramCardSide: this.cramSide,
-            sentenceBuilderCardSide: this.sbSide,
-            sentenceBuilderSelection: this.wordSelection,
+            conjureSentencesCardSide: this.csSide,
+            conjureSentencesSelection: this.wordSelection,
         };
         void this.plugin.saveData_();
     }
@@ -70,7 +70,7 @@ export class ExplorerModal extends Modal {
     private async load(): Promise<void> {
         const settings = this.plugin.data.settings;
         // Word count is not exposed in the Explorer — always take current setting value.
-        this.wordCount = settings.sentenceBuilderWordCount;
+        this.wordCount = settings.conjureSentencesWordCount;
 
         const rootTags = settings.rootDeckTags.map(t => t.startsWith("#") ? t : "#" + t);
         const mdFiles = this.app.vault.getMarkdownFiles();
@@ -115,7 +115,7 @@ export class ExplorerModal extends Modal {
                 const modes: [ReviewMode, string][] = [
                     ["Review", "Review"],
                     ["Cram", "Cram"],
-                    ["SentenceBuilder", "Sentence Builder"],
+                    ["ConjureSentences", "Conjure Sentences"],
                 ];
                 for (const [val, label] of modes) {
                     const opt = sel.createEl("option", { text: label });
@@ -167,11 +167,9 @@ export class ExplorerModal extends Modal {
         this.settingsPanelEl.empty();
         const p = this.settingsPanelEl;
 
-        if (this.mode === "SentenceBuilder") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.sbSide,
-                v => { this.sbSide = v as CardSide; this.persistState(); });
-            this.addSelectRow(p, "Selection", ["Random", "Optimised"], this.wordSelection,
-                v => { this.wordSelection = v as WordSelection; this.persistState(); });
+        if (this.mode === "ConjureSentences") {
+            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.csSide,
+                v => { this.csSide = v as CardSide; this.persistState(); });
         } else if (this.mode === "Review") {
             this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.cardSide,
                 v => { this.cardSide = v as CardSide; this.persistState(); });
@@ -247,9 +245,9 @@ export class ExplorerModal extends Modal {
 
     private launchMode(node: DeckNode): void {
         this.close();
-        if (this.mode === "SentenceBuilder") {
-            new SentenceBuilderModal(this.app, this.plugin, node, {
-                cardSide: this.sbSide,
+        if (this.mode === "ConjureSentences") {
+            new ConjureSentencesModal(this.app, this.plugin, node, {
+                cardSide: this.csSide,
                 wordCount: this.wordCount,
                 wordSelection: this.wordSelection,
                 selectionDeckTag: node.tag,

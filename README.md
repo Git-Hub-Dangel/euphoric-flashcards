@@ -19,7 +19,7 @@ Euphoric Flashcards refines spaced repetition with features I found missing, or 
    * A field for notes and explanations
    * Support for transliterations of glyphic languages or pronunciations, e.g. `汉语 - hànyǔ - Chinese`
 * Native two-way card reviews
-* A Sentence Builder review mode, for practicing deliberate sentence construction with your own flashcards
+* A Conjure Sentences review mode, for practicing deliberate sentence construction with your own flashcards
 * An Anki-like spaced-repetition algorithm with load balancing
 
 >[!WARNING] THIS GUIDE IS BEING MOVED
@@ -145,7 +145,7 @@ The explorer is the central dashboard to configure and start your reviews from. 
     - `Review Mode:` The kind of review you will be performing. You can choose from:
         - **Review**: The regular review you do once a day. Based on your comprehension of the fashcards, it will schedule cards as due in the future for spaced-repetition.
         - **Cram**: Additional full review, refresher. The plugin will review all flashcards in the selected deck regardless of schedule. But it won't alter any schedules.
-        - **Sentence Builder**: An active exercise mode that draws a certain amount of cards from across your flashcards and presents them to you. Your task is to formulate a logical sentence in the language you're learning including these words. (You can configure the amount in the plugin's settings)
+        - **Conjure Sentences**: An active exercise mode that draws a certain amount of cards from across your flashcards and presents them to you. Your task is to formulate a logical sentence in the language you're learning including these words. (You can configure the amount in the plugin's settings)
     - `Card Side:` This plugin will treat each card that you define as two: `word - translation` and `translation - word` and test you on both sides of the card. By changing the Card Side setting, you can filter to only receive your cards on one side (e.g. always `word` as guessword and `translation` as resolution), but I recommend you leave it to the two-sided `shuffle` option. It really helps to learn the word from both sides.
 
 2. **Deck Explorer** (dark green brace): The deck explorer lists all decks that the plugin has detected. If your deck isn't listed here, make sure the root tag of your deck (e.g. `#español` would be the root tag of any `#español/...` or `#español/.../...` decks) is defined in the plugins settings as discussed in the [Decks](#2-decks) section. View subdecks by expanding the chevron to the left of their parent root deck (blue arrow and circle).
@@ -190,9 +190,9 @@ Well, that's it. Divertirse y mucho éxito on your language learning journey!
 Daniel
 
 ## 🧩 More Examples
-### Sentence Builder
-This is how the sentence builder panel looks like
-![example-sentence-builder](/assets/images/example-sentence-builder.png)
+### Conjure Sentences
+This is how the conjure sentences panel looks like
+![example-conjure-sentences](/assets/images/example-conjure-sentences.png)
 
 ### Single-Note Flashcard Example
 This code-block declares most possible syntax variations.

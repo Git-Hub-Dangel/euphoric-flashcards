@@ -80,7 +80,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             // Card Types
             {
                 type: "list",
-                heading: "Card types",
+                heading: "Card Types",
                 desc: "Keys are used in the '=' operator card definition syntax: =key",
                 emptyState: "No card types yet.",
                 items: s.cardTypes.map((_tc, i) => ({
@@ -155,17 +155,17 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 ],
             },
 
-            // Sentence Builder
+            // Conjure Sentences
             {
                 type: "group",
-                heading: "Sentence Builder",
+                heading: "Conjure Sentences",
                 items: [
                     {
                         name: "Word count",
                         desc: "Number of words chosen per sentence.",
                         control: {
                             type: "slider",
-                            key: "sentenceBuilderWordCount",
+                            key: "conjureSentencesWordCount",
                             min: 1,
                             max: 17,
                             step: 1,
@@ -176,7 +176,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         desc: "Optimised: assures that the selection contains an even mix of older and newer cards.\n\nRandom: arbitrary random draw",
                         control: {
                             type: "dropdown",
-                            key: "sentenceBuilderSelection",
+                            key: "conjureSentencesSelection",
                             options: { Optimised: "Optimised", Random: "Random" },
                         },
                     },

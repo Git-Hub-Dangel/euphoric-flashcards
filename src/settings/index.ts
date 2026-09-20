@@ -1,5 +1,5 @@
 export type CardSide = "Front" | "Back" | "Shuffle";
-export type ReviewMode = "Review" | "Cram" | "SentenceBuilder";
+export type ReviewMode = "Review" | "Cram" | "ConjureSentences";
 export type WordSelection = "Random" | "Optimised";
 
 export interface TypeConfig {
@@ -29,10 +29,10 @@ export interface EuphoricSettings {
     showIntervalOnButtons: boolean;
     showKeybindingsOnDesktop: boolean;
 
-    // Sentence Builder
-    defaultSentenceBuilderSide: CardSide;
-    sentenceBuilderWordCount: number;
-    sentenceBuilderSelection: WordSelection;
+    // Conjure Sentences
+    defaultConjureSentencesSide: CardSide;
+    conjureSentencesWordCount: number;
+    conjureSentencesSelection: WordSelection;
 }
 
 export const DEFAULT_SETTINGS: EuphoricSettings = {
@@ -58,7 +58,7 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     showIntervalOnButtons: true,
     showKeybindingsOnDesktop: true,
 
-    defaultSentenceBuilderSide: "Shuffle",
-    sentenceBuilderWordCount: 4,
-    sentenceBuilderSelection: "Optimised",
+    defaultConjureSentencesSide: "Shuffle",
+    conjureSentencesWordCount: 4,
+    conjureSentencesSelection: "Optimised",
 };

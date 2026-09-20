@@ -15,7 +15,7 @@ export function addCloseButton(modal: Modal): void {
 }
 
 // obsidian modals close when the user taps the dimmed background around them.
-// for fullscreen review and sentence builder modals on mobile that means an
+// for fullscreen review and conjure sentences modals on mobile that means an
 // accidental tap near the screen edge can wipe out an in-progress session.
 // blocking taps that land outside the modal prevents that. users still have
 // the close button and `.ef-back-btn` for intentional dismissal.
