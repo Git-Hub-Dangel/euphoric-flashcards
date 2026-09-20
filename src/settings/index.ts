@@ -40,6 +40,9 @@ export interface EuphoricSettings {
     conjureSentencesSelection: WordSelection;
     enableConstructionConstraints: boolean;
     constructionConstraints: ConstructionConstraintCollection[];
+
+    // Appearance
+    animationDurationMs: number;
 }
 
 export const DEFAULT_SETTINGS: EuphoricSettings = {
@@ -70,4 +73,6 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     conjureSentencesSelection: "Optimised",
     enableConstructionConstraints: false,
     constructionConstraints: [],
+
+    animationDurationMs: 240,
 };

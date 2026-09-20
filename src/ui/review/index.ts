@@ -13,7 +13,7 @@ import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
 import { loadCardsForDeck, writeCardBack, ReviewCard } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, preventBgTapDismiss } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import { EditCardModal } from "src/ui/edit-card/index";
 
 // ---------------------------------------------------------------------------
@@ -142,9 +142,9 @@ export class ReviewModal extends Modal {
         this.modalEl.addClass("ef-modal-fullscreen");
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
+        applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
         this.contentEl.addClass("ef-review");
         this.addBackButton();
-        this.contentEl.createEl("p", { text: "Loading cards…", cls: "ef-loading" });
         this.load().catch(err => {
             console.error("EuphoricFlashcards ReviewModal:", err);
             this.contentEl.empty();
@@ -163,8 +163,10 @@ export class ReviewModal extends Modal {
     }
 
     private backToExplorer(): void {
-        this.close();
-        new ExplorerModal(this.app, this.plugin).open();
+        fadeOutThen(this, () => {
+            this.close();
+            new ExplorerModal(this.app, this.plugin).open();
+        });
     }
 
     private addBackButton(): void {
@@ -195,10 +197,11 @@ export class ReviewModal extends Modal {
 
     private renderEmpty(): void {
         this.contentEl.createDiv({ cls: "ef-done" }, div => {
-            div.createEl("h2", { text: "Nothing to review" });
-            div.createEl("p", { text: "All caught up for this deck.", cls: "ef-done-sub" });
-            div.createEl("button", { text: "Back to Explorer", cls: "ef-btn ef-btn-primary" })
-                .addEventListener("click", () => this.backToExplorer());
+            staggerIn(div.createEl("h2", { text: "Nothing to review" }), 0);
+            staggerIn(div.createEl("p", { text: "All caught up for this deck.", cls: "ef-done-sub" }), 1);
+            const btn = div.createEl("button", { text: "Back to Explorer", cls: "ef-btn ef-btn-primary" });
+            btn.addEventListener("click", () => this.backToExplorer());
+            staggerIn(btn, 2);
         });
     }
 
@@ -212,20 +215,23 @@ export class ReviewModal extends Modal {
         const reveal = cardReveal(item.card);
         const settings = this.plugin.data.settings;
 
-        // Header
+        // Header — the container itself is not animated so the border-bottom
+        // guideline stays static between cards. The progress counter still
+        // gets a subtle flash whenever it re-renders (see .ef-progress-flash).
         this.contentEl.createDiv({ cls: "ef-review-header" }, h => {
             h.createSpan({ text: this.node.fullPath, cls: "ef-review-deck-name" });
             const right = h.createDiv({ cls: "ef-review-header-right" });
             const editBtn = right.createEl("button", { cls: "ef-edit-btn", attr: { "aria-label": "Edit card" } });
             setIcon(editBtn, "pencil");
             editBtn.addEventListener("click", () => this.openEditCardModal(item));
-            right.createSpan({ text: `${this.reviewed} / ${this.totalCards - this.reviewed}`, cls: "ef-review-progress" });
+            right.createSpan({ text: `${this.reviewed} / ${this.totalCards - this.reviewed}`, cls: "ef-review-progress ef-progress-flash" });
         });
 
         // Card body
         const body = this.contentEl.createDiv({ cls: "ef-card-body" });
 
-        body.createDiv({ text: face.prompt, cls: "ef-card-prompt" });
+        const promptEl = body.createDiv({ text: face.prompt, cls: "ef-card-prompt" });
+        staggerIn(promptEl, 0);
 
         // Answer (hidden until revealed)
         const answerEl = body.createDiv({ cls: "ef-answer ef-hidden" });
@@ -253,13 +259,17 @@ export class ReviewModal extends Modal {
             }
         }
 
-        // Actions
+        // Actions — the container is not animated so its border-top guideline
+        // stays static; individual buttons inside still fade in.
         const actions = this.contentEl.createDiv({ cls: "ef-review-actions" });
         const showBtn = actions.createEl("button", { text: "Show Answer", cls: "ef-btn ef-btn-primary" });
+        staggerIn(showBtn, 1);
         const doReveal = (): void => {
             if (this.revealed) return;
             this.revealed = true;
             answerEl.removeClass("ef-hidden");
+            // Animate only the newly revealed content — the prompt stays put.
+            staggerIn(answerEl, 0);
             showBtn.remove();
             this.renderResponseButtons(actions, item, face.schedule);
         };
@@ -325,6 +335,7 @@ export class ReviewModal extends Modal {
         onClick: () => void,
     ): void {
         const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
+        staggerIn(btn, keyNum - 1);
         if (Platform.isDesktop && this.plugin.data.settings.showKeybindingsOnDesktop) {
             btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
         }
@@ -449,6 +460,7 @@ export class ReviewModal extends Modal {
 
         new EditCardModal(this.app, {
             initialText: displayLines.join("\n"),
+            animationDurationMs: this.plugin.data.settings.animationDurationMs,
             onSave: async (newText) => {
                 const editedLines = newText.split("\n");
                 const parsed = parseCard(editedLines, 0);
@@ -490,13 +502,14 @@ export class ReviewModal extends Modal {
         this.clearKeymap();
         this.contentEl.empty();
         this.contentEl.createDiv({ cls: "ef-done" }, div => {
-            div.createEl("h2", { text: "Session complete!" });
-            div.createEl("p", {
+            staggerIn(div.createEl("h2", { text: "Session complete!" }), 0);
+            staggerIn(div.createEl("p", {
                 text: `Reviewed ${this.reviewed} card${this.reviewed !== 1 ? "s" : ""}.`,
                 cls: "ef-done-sub",
-            });
-            div.createEl("button", { text: "Back to Explorer", cls: "ef-btn ef-btn-primary" })
-                .addEventListener("click", () => this.backToExplorer());
+            }), 1);
+            const btn = div.createEl("button", { text: "Back to Explorer", cls: "ef-btn ef-btn-primary" });
+            btn.addEventListener("click", () => this.backToExplorer());
+            staggerIn(btn, 2);
         });
     }
 }

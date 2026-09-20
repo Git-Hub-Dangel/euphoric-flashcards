@@ -601,12 +601,12 @@
 }
 .ef-cc-pill {
     display: inline-block;
-    padding: 3px 12px;
-    border: 1px solid var(--interactive-accent);
-    border-radius: 999px;
+    padding: 8px 18px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
     background: transparent;
     color: var(--text-normal);
-    font-size: 0.85em;
+    font-size: 1em;
     line-height: 1.3;
 }
 
@@ -798,4 +798,107 @@
     min-width: 28px;
     padding: 0;
     margin-top: 2px;
+}
+
+/* ── Animations ──────────────────────────────────────────────
+   Subtle fade + rise for freshly rendered content. Duration is
+   controlled per-modal via the CSS variable --ef-anim-dur set from
+   settings.animationDurationMs. Stagger between rows is provided
+   by pre-baked .ef-stagger-N classes rather than inline styles
+   (marketplace-lint safe).
+   ──────────────────────────────────────────────────────────── */
+@keyframes ef-rise-in {
+    from { opacity: 0; transform: translate3d(0, 8px, 0); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes ef-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+@keyframes ef-fade-out {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+}
+@keyframes ef-flash-in {
+    from { opacity: 0.4; }
+    to   { opacity: 1; }
+}
+
+/* Base stagger multiplier lives on :root so per-surface overrides (below) can
+   raise or lower it without the .ef-anim-in rule declaring its own value —
+   direct declarations on the animated element itself would out-cascade any
+   ancestor override. */
+:root { --ef-stagger-mult: 1; }
+
+.ef-anim-in {
+    animation: ef-rise-in var(--ef-anim-dur) cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(var(--ef-stagger-delay) * var(--ef-stagger-mult));
+    will-change: opacity, transform;
+}
+
+/* Conjure Sentences word rows use a gentler pace than the other surfaces. */
+.ef-cs-word-list { --ef-stagger-mult: 1.8; }
+
+.ef-stagger-0  { --ef-stagger-delay: 0ms;   }
+.ef-stagger-1  { --ef-stagger-delay: 30ms;  }
+.ef-stagger-2  { --ef-stagger-delay: 60ms;  }
+.ef-stagger-3  { --ef-stagger-delay: 90ms;  }
+.ef-stagger-4  { --ef-stagger-delay: 120ms; }
+.ef-stagger-5  { --ef-stagger-delay: 150ms; }
+.ef-stagger-6  { --ef-stagger-delay: 180ms; }
+.ef-stagger-7  { --ef-stagger-delay: 210ms; }
+.ef-stagger-8  { --ef-stagger-delay: 240ms; }
+.ef-stagger-9  { --ef-stagger-delay: 270ms; }
+.ef-stagger-10 { --ef-stagger-delay: 300ms; }
+.ef-stagger-11 { --ef-stagger-delay: 330ms; }
+.ef-stagger-12 { --ef-stagger-delay: 360ms; }
+.ef-stagger-13 { --ef-stagger-delay: 390ms; }
+.ef-stagger-14 { --ef-stagger-delay: 420ms; }
+
+/* Global kill switch — set when animationDurationMs = 0. */
+.ef-anim-off .ef-anim-in {
+    animation: none;
+}
+
+/* Accessibility: respect the user's OS-level reduced motion preference. */
+@media (prefers-reduced-motion: reduce) {
+    .ef-anim-in,
+    .ef-cc-pill.ef-fading,
+    .ef-progress-flash,
+    .ef-deck-chevron,
+    .modal.ef-modal-leaving .modal-content {
+        animation: none;
+        transition: none;
+    }
+}
+
+/* Deck chevron: smooth rotate on expand/collapse. */
+.ef-deck-chevron {
+    transition: transform 150ms ease;
+}
+.ef-deck-chevron.is-open {
+    transform: rotate(90deg);
+}
+
+/* Response button tactile press. */
+.ef-btn {
+    transition: opacity 0.1s, transform 100ms ease;
+}
+.ef-btn:active {
+    transform: scale(0.92);
+}
+
+/* Progress counter flash — subtle opacity dip when the count updates. */
+.ef-progress-flash {
+    animation: ef-flash-in 200ms ease both;
+}
+
+/* Constraint pill cross-fade. Applied briefly before the pill is replaced. */
+.ef-cc-pill.ef-fading {
+    animation: ef-fade-out 100ms ease forwards;
+}
+
+/* Modal cross-fade: fade the leaving modal's content before close-then-open. */
+.modal.ef-modal-leaving .modal-content {
+    animation: ef-fade-out 120ms ease both;
 }

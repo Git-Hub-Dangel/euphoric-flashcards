@@ -29,3 +29,30 @@ export function preventBgTapDismiss(containerEl: HTMLElement): void {
     containerEl.addEventListener("mousedown", block, { capture: true });
     containerEl.addEventListener("touchstart", block, { capture: true });
 }
+
+// Applies the user's `animationDurationMs` setting to a modal's container
+// via a CSS custom property, or toggles a kill-switch class when disabled.
+// prefers-reduced-motion is handled purely in CSS.
+export function applyAnimationDuration(containerEl: HTMLElement, ms: number): void {
+    if (ms <= 0) {
+        containerEl.addClass("ef-anim-off");
+        return;
+    }
+    containerEl.style.setProperty("--ef-anim-dur", `${ms}ms`);
+}
+
+// Marks an element to fade-and-rise on next paint. `index` picks one of the
+// pre-baked stagger classes (0..14) so successive rows begin their animation
+// a fixed step apart. Wrap-around at 15 caps the total delay.
+export function staggerIn(el: HTMLElement, index: number): void {
+    el.addClass("ef-anim-in");
+    el.addClass(`ef-stagger-${index % 15}`);
+}
+
+// Triggers the leaving fade-out on a modal, then invokes `next` after the
+// animation duration. Used to bridge close-then-open transitions between our
+// modals so the swap doesn't flash.
+export function fadeOutThen(modal: Modal, next: () => void): void {
+    modal.modalEl.addClass("ef-modal-leaving");
+    window.setTimeout(next, 120);
+}

@@ -1,5 +1,5 @@
 import { App, Modal } from "obsidian";
-import { preventBgTapDismiss } from "src/ui/modal-utils";
+import { applyAnimationDuration, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 
 export interface EditCardModalOptions {
     initialText: string;
@@ -7,6 +7,7 @@ export interface EditCardModalOptions {
     // null on success. If null is returned, the modal closes.
     onSave: (newText: string) => Promise<string | null>;
     onClose?: () => void;
+    animationDurationMs: number;
 }
 
 export class EditCardModal extends Modal {
@@ -18,8 +19,10 @@ export class EditCardModal extends Modal {
 
     onOpen(): void {
         preventBgTapDismiss(this.containerEl);
+        applyAnimationDuration(this.containerEl, this.opts.animationDurationMs);
         this.modalEl.addClass("ef-edit-modal");
         this.contentEl.empty();
+        staggerIn(this.contentEl, 0);
 
         this.contentEl.createEl("h3", { text: "Edit card", cls: "ef-edit-title" });
 
