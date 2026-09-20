@@ -93,9 +93,10 @@
     padding: 8px 16px;
     cursor: pointer;
     font-size: 0.9em;
-    transition: opacity 0.1s;
+    transition: opacity 0.1s, transform 100ms ease;
 }
-.ef-btn:hover { opacity: 0.85; }
+.ef-btn:hover  { opacity: 0.85; }
+.ef-btn:active { transform: scale(0.92); }
 
 .ef-btn.ef-btn-primary {
     background-color: var(--interactive-accent);
@@ -811,10 +812,6 @@
     from { opacity: 0; transform: translate3d(0, 8px, 0); }
     to   { opacity: 1; transform: none; }
 }
-@keyframes ef-fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-}
 @keyframes ef-fade-out {
     from { opacity: 1; }
     to   { opacity: 0; }
@@ -882,14 +879,6 @@
 }
 .ef-deck-chevron.is-open {
     transform: rotate(90deg);
-}
-
-/* Response button tactile press. */
-.ef-btn {
-    transition: opacity 0.1s, transform 100ms ease;
-}
-.ef-btn:active {
-    transform: scale(0.92);
 }
 
 /* Progress counter flash — subtle opacity dip when the count updates. */

@@ -40,10 +40,22 @@ export function applyAnimationDuration(containerEl: HTMLElement, ms: number): vo
     }
     containerEl.style.setProperty("--ef-anim-dur", `${ms}ms`);
     // On mobile, Obsidian slides the modal up from the bottom over ~200 ms.
-    // Offset every stagger by a pre-roll so our fade-ins wait for the modal
-    // to settle instead of firing during the slide.
+    // Offset every stagger by a pre-roll so our initial fade-ins wait for
+    // the modal to settle. This offset MUST be cleared after the initial
+    // render batch — otherwise every later interaction (reveal, next card,
+    // deck expand, redraw) would also wait for the pre-roll, producing a
+    // sluggish 300 ms lag after every tap. The first user touch/click on
+    // the container is a reliable "first render is done" signal: the initial
+    // batch of `.ef-anim-in` elements has already had its animation-delay
+    // computed by the browser, so zeroing the variable now only affects
+    // future elements.
     if (Platform.isMobile) {
         containerEl.style.setProperty("--ef-anim-preroll", "300ms");
+        const clearPreroll = (): void => {
+            containerEl.style.setProperty("--ef-anim-preroll", "0ms");
+        };
+        containerEl.addEventListener("touchstart", clearPreroll, { capture: true, once: true });
+        containerEl.addEventListener("click", clearPreroll, { capture: true, once: true });
     }
 }
 
