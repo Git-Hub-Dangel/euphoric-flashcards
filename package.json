@@ -1,6 +1,6 @@
 {
     "name": "euphoric-flashcards",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "description": "Spaced-repetition flashcard plugin for Obsidian with tag-based decks and Conjure Sentences mode.",
     "main": "main.js",
     "scripts": {
