@@ -38,7 +38,7 @@ export function applyAnimationDuration(containerEl: HTMLElement, ms: number): vo
         containerEl.addClass("ef-anim-off");
         return;
     }
-    containerEl.style.setProperty("--ef-anim-dur", `${ms}ms`);
+    containerEl.setCssProps({ "--ef-anim-dur": `${ms}ms` });
     // On mobile, Obsidian slides the modal up from the bottom over ~200 ms.
     // Offset every stagger by a pre-roll so our initial fade-ins wait for
     // the modal to settle. This offset MUST be cleared after the initial
@@ -50,9 +50,9 @@ export function applyAnimationDuration(containerEl: HTMLElement, ms: number): vo
     // computed by the browser, so zeroing the variable now only affects
     // future elements.
     if (Platform.isMobile) {
-        containerEl.style.setProperty("--ef-anim-preroll", "300ms");
+        containerEl.setCssProps({ "--ef-anim-preroll": "300ms" });
         const clearPreroll = (): void => {
-            containerEl.style.setProperty("--ef-anim-preroll", "0ms");
+            containerEl.setCssProps({ "--ef-anim-preroll": "0ms" });
         };
         containerEl.addEventListener("touchstart", clearPreroll, { capture: true, once: true });
         containerEl.addEventListener("click", clearPreroll, { capture: true, once: true });

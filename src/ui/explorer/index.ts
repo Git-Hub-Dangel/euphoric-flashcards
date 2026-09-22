@@ -230,7 +230,7 @@ export class ExplorerModal extends Modal {
 
         // Name cell: indent + chevron + name
         const nameCell = row.createDiv({ cls: "ef-deck-name-cell" });
-        nameCell.style.paddingLeft = `${depth * 20}px`;
+        nameCell.setCssStyles({ paddingLeft: `${depth * 20}px` });
 
         const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
         if (hasChildren) {

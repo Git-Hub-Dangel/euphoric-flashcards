@@ -270,7 +270,7 @@ export class ConjureSentencesModal extends Modal {
                     text: tc?.label ?? reveal.type,
                     cls: "ef-type-badge",
                 });
-                badge.style.backgroundColor = tc?.color ?? "var(--background-modifier-border)";
+                badge.setCssStyles({ backgroundColor: tc?.color ?? "var(--background-modifier-border)" });
             }
         });
 
