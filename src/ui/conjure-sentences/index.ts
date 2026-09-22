@@ -9,6 +9,8 @@ import type { ParsedCard } from "src/parsing";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
+import { fisherYates } from "src/utils/shuffle";
+import { resolveFaceIndex } from "src/utils/face";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -20,14 +22,6 @@ export interface ConjureSentencesOptions {
 interface WordItem {
     card: ParsedCard;
     faceIndex: 0 | 1;
-}
-
-function fisherYates<T>(arr: T[]): T[] {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j]!, arr[i]!];
-    }
-    return arr;
 }
 
 export class ConjureSentencesModal extends Modal {
@@ -206,10 +200,7 @@ export class ConjureSentencesModal extends Modal {
         const { wordCount, wordSelection, cardSide } = this.options;
 
         // orientation once per sentence for all cards
-        const faceIndex: 0 | 1 =
-            cardSide === "Front" ? 0
-            : cardSide === "Back" ? 1
-            : (Math.random() < 0.5 ? 0 : 1);
+        const faceIndex = resolveFaceIndex(cardSide);
 
         const toWordItem = (rc: ReviewCard): WordItem => ({ card: rc.card, faceIndex });
 

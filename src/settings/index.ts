@@ -1,5 +1,5 @@
 export type CardSide = "Front" | "Back" | "Shuffle";
-export type ReviewMode = "Review" | "Cram" | "ConjureSentences";
+export type ReviewMode = "Review" | "Cram" | "ConjureSentences" | "Learn";
 export type WordSelection = "Random" | "Optimised";
 
 export interface TypeConfig {
@@ -41,6 +41,10 @@ export interface EuphoricSettings {
     enableConstructionConstraints: boolean;
     constructionConstraints: ConstructionConstraintCollection[];
 
+    // Learn
+    learnGroupsPerSession: number;
+    defaultLearnSide: CardSide;
+
     // Appearance
     animationDurationMs: number;
 }
@@ -73,6 +77,9 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     conjureSentencesSelection: "Optimised",
     enableConstructionConstraints: false,
     constructionConstraints: [],
+
+    learnGroupsPerSession: 3,
+    defaultLearnSide: "Shuffle",
 
     animationDurationMs: 240,
 };

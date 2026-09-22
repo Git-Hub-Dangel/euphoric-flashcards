@@ -191,6 +191,34 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 ],
             },
 
+            // Learn
+            {
+                type: "group",
+                heading: "Learn",
+                items: [
+                    {
+                        name: "Groups per session",
+                        desc: "Number of card groups (up to 8 cards each) completed per Learn session. Overridable per-session in the Explorer.",
+                        control: {
+                            type: "slider",
+                            key: "learnGroupsPerSession",
+                            min: 1,
+                            max: 10,
+                            step: 1,
+                        },
+                    },
+                    {
+                        name: "Default card side",
+                        desc: "Which face is prompted in Learn. Shuffle randomises per card.",
+                        control: {
+                            type: "dropdown",
+                            key: "defaultLearnSide",
+                            options: { Shuffle: "Shuffle", Front: "Front", Back: "Back" },
+                        },
+                    },
+                ],
+            },
+
             // Construction Constraints
             {
                 type: "list",

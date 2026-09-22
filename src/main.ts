@@ -10,6 +10,7 @@ interface ExplorerState {
     cramCardSide: CardSide;
     conjureSentencesCardSide: CardSide;
     conjureSentencesSelection: WordSelection;
+    learnCardSide?: CardSide;
 }
 
 interface PluginData {

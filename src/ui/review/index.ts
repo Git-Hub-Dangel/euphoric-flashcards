@@ -3,18 +3,20 @@ import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
 import { SRAlgorithmOsr, textInterval } from "src/scheduling/osr";
-import { DueDateHistogram } from "src/scheduling/due-date-histogram";
-import { PREFERRED_DATE_FORMAT } from "src/scheduling/constants";
 import { withUpdatedSchedules, frontFace, backFace, cardReveal, parseCard } from "src/parsing";
 import type { ParsedCard, CardFace } from "src/parsing";
 import type { ScheduleInfo } from "src/persistence";
 import type { ReviewMode, CardSide } from "src/settings";
 import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
+import { isFaceDue } from "src/scheduling/due";
+import { previewInterval, applyResponse } from "src/scheduling/session-helpers";
+import { fisherYates } from "src/utils/shuffle";
 import { loadCardsForDeck, writeCardBack, ReviewCard } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import { EditCardModal } from "src/ui/edit-card/index";
+import { writeGradedResponse, shiftLocationsForDelta } from "src/ui/shared/write-schedule";
 
 // ---------------------------------------------------------------------------
 // Review queue
@@ -32,16 +34,12 @@ function buildReviewQueue(
     cardSide: CardSide,
     today: Date,
 ): ReviewItem[] {
-    const todayMs = today.valueOf();
-    const isFaceDue = (s: ScheduleInfo | null): boolean =>
-        s === null || s.dueDate.valueOf() <= todayMs;
-
     const items: ReviewItem[] = [];
 
     for (const { card, filePath } of cards) {
         if (mode === "Review") {
-            if (isFaceDue(card.schedules[0])) items.push({ card, filePath, faceIndex: 0 });
-            if (isFaceDue(card.schedules[1])) items.push({ card, filePath, faceIndex: 1 });
+            if (isFaceDue(card.schedules[0], today)) items.push({ card, filePath, faceIndex: 0 });
+            if (isFaceDue(card.schedules[1], today)) items.push({ card, filePath, faceIndex: 1 });
         } else {
             // Cram, one side per card, determined by settings
             let fi: 0 | 1;
@@ -52,43 +50,7 @@ function buildReviewQueue(
         }
     }
 
-    // Shuffle
-    for (let i = items.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [items[i], items[j]] = [items[j]!, items[i]!];
-    }
-    return items;
-}
-
-// ---------------------------------------------------------------------------
-// Scheduling helpers
-// ---------------------------------------------------------------------------
-
-function histogramFor(plugin: EuphoricFlashcardsPlugin): DueDateHistogram {
-    if (!plugin.data.settings.loadBalance) return new DueDateHistogram();
-    return plugin.histogramStore.toRelativeHistogram(globalDateProvider.today);
-}
-
-function previewInterval(
-    schedule: ScheduleInfo | null,
-    response: ReviewResponse,
-    plugin: EuphoricFlashcardsPlugin,
-): number {
-    const algo = new SRAlgorithmOsr(plugin.data.settings);
-    const h = histogramFor(plugin);
-    if (schedule === null) return algo.cardGetNewSchedule(response, h).interval;
-    return algo.cardCalcUpdatedSchedule(response, schedule, h).interval;
-}
-
-function applyResponse(
-    schedule: ScheduleInfo | null,
-    response: ReviewResponse,
-    plugin: EuphoricFlashcardsPlugin,
-): ScheduleInfo {
-    const algo = new SRAlgorithmOsr(plugin.data.settings);
-    const h = histogramFor(plugin);
-    if (schedule === null) return algo.cardGetNewSchedule(response, h);
-    return algo.cardCalcUpdatedSchedule(response, schedule, h);
+    return fisherYates(items);
 }
 
 // Strip SR HTML comments from raw card lines for display in the edit modal.
@@ -416,52 +378,21 @@ export class ReviewModal extends Modal {
     }
 
     private async writeSchedule(item: ReviewItem, newSchedule: ScheduleInfo): Promise<void> {
-        const oldSchedule = item.card.schedules[item.faceIndex];
-        const updatedSchedules: [ScheduleInfo | null, ScheduleInfo | null] = [
-            item.card.schedules[0],
-            item.card.schedules[1],
-        ];
-        updatedSchedules[item.faceIndex] = newSchedule;
-
-        const newLines = withUpdatedSchedules(item.card, updatedSchedules, this.plugin.data.settings.baseEase);
-        const oldLength = item.card.rawLines.length;
-        await writeCardBack(this.app.vault, this.fileCache, item.filePath, item.card, newLines);
-
-        // update the persisted histogram: remove the old due-date bucket and
-        // add the new one. skips dummy dates internally.
-        if (this.plugin.data.settings.loadBalance) {
-            const store = this.plugin.histogramStore;
-            if (oldSchedule !== null) store.decrement(oldSchedule.dueDate.format(PREFERRED_DATE_FORMAT));
-            store.increment(newSchedule.dueDate.format(PREFERRED_DATE_FORMAT));
-            void this.plugin.saveData_();
-        }
-
-        // Keep the in-memory card consistent with what we just wrote so any
-        // same-session re-write (e.g. the other face of the same card) sees
-        // the new format instead of the legacy inline form.
-        item.card.rawLines = newLines;
-        item.card.endLine = item.card.startLine + newLines.length - 1;
-        item.card.schedules[item.faceIndex] = newSchedule;
-
-        const delta = newLines.length - oldLength;
-        if (delta !== 0) this.shiftQueueForDelta(item.card, item.filePath, delta);
+        const delta = await writeGradedResponse({
+            plugin: this.plugin,
+            vault: this.app.vault,
+            fileCache: this.fileCache,
+            item,
+            newSchedule,
+        });
+        this.shiftQueueForDelta(item.card, item.filePath, delta);
     }
 
     // Cards can appear twice in the queue (front + back share one ParsedCard);
     // dedupe by identity so we don't shift the same card twice. Only entries
     // after `changedCard` in the same file need shifting.
     private shiftQueueForDelta(changedCard: ParsedCard, filePath: string, delta: number): void {
-        const originalStart = changedCard.startLine;
-        const seen = new Set<ParsedCard>([changedCard]);
-        for (const q of this.queue) {
-            if (q.filePath !== filePath) continue;
-            if (seen.has(q.card)) continue;
-            seen.add(q.card);
-            if (q.card.startLine > originalStart) {
-                q.card.startLine += delta;
-                q.card.endLine += delta;
-            }
-        }
+        shiftLocationsForDelta(this.queue, changedCard, filePath, delta);
     }
 
     private openEditCardModal(item: ReviewItem): void {
