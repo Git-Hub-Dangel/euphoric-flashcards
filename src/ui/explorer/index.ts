@@ -15,6 +15,8 @@ export class ExplorerModal extends Modal {
     private cardSide: CardSide;
     private cramSide: CardSide;
     private csSide: CardSide;
+    private learnSide: CardSide;
+    private learnGroups: number;
     private wordCount: number;
     private wordSelection: WordSelection;
     private roots: DeckNode[] = [];
@@ -37,6 +39,8 @@ export class ExplorerModal extends Modal {
         this.csSide = saved?.conjureSentencesCardSide ?? settings.defaultConjureSentencesSide;
         this.wordSelection = saved?.conjureSentencesSelection ?? settings.conjureSentencesSelection;
         this.wordCount = settings.conjureSentencesWordCount;
+        this.learnSide = saved?.learnCardSide ?? settings.defaultLearnSide;
+        this.learnGroups = settings.learnGroupsPerSession;
     }
 
     private persistState(): void {
@@ -46,6 +50,7 @@ export class ExplorerModal extends Modal {
             cramCardSide: this.cramSide,
             conjureSentencesCardSide: this.csSide,
             conjureSentencesSelection: this.wordSelection,
+            learnCardSide: this.learnSide,
         };
         void this.plugin.saveData_();
     }
@@ -71,6 +76,9 @@ export class ExplorerModal extends Modal {
         const settings = this.plugin.data.settings;
         // Word count is not exposed in the Explorer — always take current setting value.
         this.wordCount = settings.conjureSentencesWordCount;
+        // Groups-per-session is instance-only; re-read on every open so
+        // per-session overrides reset naturally when the Explorer reopens.
+        this.learnGroups = settings.learnGroupsPerSession;
 
         const rootTags = settings.rootDeckTags.map(t => t.startsWith("#") ? t : "#" + t);
         const mdFiles = this.app.vault.getMarkdownFiles();
@@ -116,6 +124,7 @@ export class ExplorerModal extends Modal {
                 const modes: [ReviewMode, string][] = [
                     ["Review", "Review"],
                     ["Cram", "Cram"],
+                    ["Learn", "Learn"],
                     ["ConjureSentences", "Conjure Sentences"],
                 ];
                 for (const [val, label] of modes) {
@@ -187,6 +196,12 @@ export class ExplorerModal extends Modal {
         } else if (this.mode === "Cram") {
             this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.cramSide,
                 v => { this.cramSide = v as CardSide; this.persistState(); });
+        } else if (this.mode === "Learn") {
+            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.learnSide,
+                v => { this.learnSide = v as CardSide; this.persistState(); });
+            const groupOptions = Array.from({ length: 10 }, (_, i) => String(i + 1));
+            this.addSelectRow(p, "Groups", groupOptions, String(this.learnGroups),
+                v => { this.learnGroups = parseInt(v, 10); });
         }
     }
 
@@ -282,6 +297,11 @@ export class ExplorerModal extends Modal {
                 wordSelection: this.wordSelection,
                 selectionDeckTag: node.tag,
             }).open();
+            return;
+        }
+        if (this.mode === "Learn") {
+            // Phase 5 wires this to LearnModal with { cardSide: this.learnSide,
+            // groupLimit: this.learnGroups, selectionDeckTag: node.tag }.
             return;
         }
         const side = this.mode === "Cram" ? this.cramSide : this.cardSide;

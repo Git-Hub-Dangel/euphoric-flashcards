@@ -6,7 +6,7 @@ Companion to `LEARN.md` (the full plan). Records what has landed on the `learn-m
 
 - **Baseline:** 95 tests → **now:** 144 tests, all green. `npx tsc --noEmit --skipLibCheck` clean, `npm run build` clean, `grep -rn "\.style\." src/ --include="*.ts"` returns nothing.
 - **Branch:** `learn-mode`. No commits yet — everything is uncommitted working-tree changes.
-- **Phase 3 finished.** Next up is Phase 4 (Explorer wiring).
+- **Phase 4 finished.** Next up is Phase 5 (`LearnModal`).
 
 ## Phase 1 — Extract shared primitives — DONE
 
@@ -54,10 +54,20 @@ Test files (49 new tests):
 
 Nothing in Phase 3 touched the Explorer UI itself — that is Phase 4.
 
-## Phases 4–7 — untouched
+## Phase 4 — Explorer wiring — DONE
+
+`src/ui/explorer/index.ts`:
+- Added instance fields `learnSide: CardSide` (persisted through `explorerState.learnCardSide`, falls back to `settings.defaultLearnSide`) and `learnGroups: number` (instance-only, re-read from `settings.learnGroupsPerSession` in `load()` so per-session overrides reset naturally on every reopen — blueprint §10 / plan Phase 3 rule).
+- `"Learn"` added to the mode dropdown between `Cram` and `Conjure Sentences`.
+- `renderSettingsPanel` gained a `Learn` branch: Card Side dropdown (persists via `learnCardSide`) plus a Groups dropdown of integers 1..10 that mutates the instance field only (no `persistState()`).
+- `persistState` writes `learnCardSide`; `learnGroups` is never persisted.
+- `openTargetModal` has a `Learn` branch that is currently a no-op — Phase 5 wires it to `new LearnModal(...)` with `{ cardSide: this.learnSide, groupLimit: this.learnGroups, selectionDeckTag: node.tag }`. The click still closes the Explorer via `launchMode`'s `fadeOutThen`; without a target modal, the user lands on an empty vault view. Acceptable interim state until Phase 5 lands.
+
+Verification: `npx tsc --noEmit --skipLibCheck` clean, `npm test` all 144 pass, `npm run build` clean, `grep -rn "\.style\." src/ --include="*.ts"` empty.
+
+## Phases 5–7 — untouched
 
 Blueprint sections still ahead:
-- Phase 4: Explorer wiring — mode dropdown option, `renderSettingsPanel` branch for Learn (Card Side dropdown + Groups dropdown 1..10 instance-only), `openTargetModal` dispatch to `LearnModal`, `persistState` writes `learnCardSide` only.
 - Phase 5: `src/ui/learn/index.ts` (`LearnModal`). Reuses Review's face render + Conjure Sentences' word render (extract `renderWordItem` + `buildConstructionConstraintPool` into `src/ui/shared/*` if extraction stays clean). Fullscreen invariants (`preventBgTapDismiss`, `addCloseButton`, `applyAnimationDuration`, `.ef-modal-fullscreen`). Progress = `cleared/total` in current group and `groupsCompleted/groupLimit`. Edit-pencil shift uses `session.heldLocations()` + `shiftLocationsForDelta`.
 - Phase 6: `styles.css` (only if new selectors needed) + `EF.md` update in the same commit (invariant 21). New invariants to add: (a) write-eligibility fixed at load and gated by `writtenFaces`, (b) session-wide line-shift compensation across pools + queue + carryover + anchors, (c) carryover at most once per card per session, (d) sentence tasks never write schedules.
 - Phase 7: manual smoke test (blueprint §12 checklist).
