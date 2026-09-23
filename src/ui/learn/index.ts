@@ -161,8 +161,12 @@ export class LearnModal extends Modal {
         // triggered a group past the effectiveLimit).
         const activeGroup = p.total > 0 ? gc + 1 : gc;
         right.createSpan({
-            text: `${p.cleared}/${p.total}  ·  ${activeGroup}/${gl}`,
+            text: `${p.cleared}/${p.total}`,
             cls: "ef-review-progress ef-progress-flash",
+        });
+        right.createSpan({
+            text: `${activeGroup}/${gl}`,
+            cls: "ef-learn-group-progress ef-progress-flash",
         });
     }
 
