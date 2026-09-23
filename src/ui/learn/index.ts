@@ -123,6 +123,7 @@ export class LearnModal extends Modal {
             groupLimit: this.options.groupLimit,
             wordCount: s.conjureSentencesWordCount,
             cardSide: this.options.cardSide,
+            sentenceSide: s.learnSentenceSide,
             today,
             rng: Math.random,
         });

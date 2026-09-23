@@ -1,4 +1,9 @@
 export type CardSide = "Front" | "Back" | "Shuffle";
+// Optional override applied to Conjure Sentences steps *inside Learn mode*
+// when the active Learn side is "Shuffle". "Default" means no override:
+// sentence draws keep their per-draw random face pick. When the active Learn
+// side is monodirectional ("Front"/"Back") this setting is ignored.
+export type LearnSentenceSide = "Default" | "Front" | "Back";
 export type ReviewMode = "Review" | "Cram" | "ConjureSentences" | "Learn";
 export type WordSelection = "Random" | "Optimised";
 
@@ -44,6 +49,7 @@ export interface EuphoricSettings {
     // Learn
     learnGroupsPerSession: number;
     defaultLearnSide: CardSide;
+    learnSentenceSide: LearnSentenceSide;
 
     // Appearance
     animationDurationMs: number;
@@ -80,6 +86,7 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
 
     learnGroupsPerSession: 3,
     defaultLearnSide: "Shuffle",
+    learnSentenceSide: "Default",
 
     animationDurationMs: 240,
 };

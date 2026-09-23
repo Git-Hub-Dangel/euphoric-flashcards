@@ -23,7 +23,7 @@ import {
 } from "src/learn/sentence-planner";
 import type { SentenceWordSelection } from "src/learn/sentence-planner";
 import { resolveFaceIndex } from "src/utils/face";
-import type { CardSide } from "src/settings";
+import type { CardSide, LearnSentenceSide } from "src/settings";
 
 export type LearnStep =
     | { kind: "face"; item: LearnItem; isPostAgain: boolean; groupSize: number }
@@ -46,6 +46,10 @@ export interface LearnSessionOptions {
     groupLimit: number;
     wordCount: number;
     cardSide: CardSide;
+    // When cardSide is "Shuffle", sentence draws pick a face uniformly per
+    // draw. A non-Default value here forces every sentence draw to that face
+    // instead. Ignored when cardSide is "Front"/"Back" (already fixed).
+    sentenceSide?: LearnSentenceSide;
     today: Date;
     rng: () => number;
 }
@@ -358,7 +362,15 @@ export class LearnSession {
             const h = g.histories.get(loc.card);
             return h !== undefined && isEligibleForSentences(h);
         });
-        const faceIndex = resolveFaceIndex(this.opts.cardSide, this.opts.rng);
+        // When Learn's active side is Shuffle, an explicit sentenceSide of
+        // Front/Back pins the face for this draw instead of rolling per-draw.
+        let faceIndex: 0 | 1;
+        const override = this.opts.sentenceSide;
+        if (this.opts.cardSide === "Shuffle" && override !== undefined && override !== "Default") {
+            faceIndex = override === "Front" ? 0 : 1;
+        } else {
+            faceIndex = resolveFaceIndex(this.opts.cardSide, this.opts.rng);
+        }
         return pickSentenceWords({
             eligible,
             histories: g.histories,

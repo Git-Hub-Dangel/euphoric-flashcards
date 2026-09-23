@@ -44,11 +44,11 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             // Info
             {
                 type: "group",
-                heading: "Resources for Euphoric Flashcards",
+                heading: "",
                 items: [
                     {
                         name: "",
-                        desc: "Open the official introductory follow-along guide to Euphoric Flashcards. There, you'll also find links to the repo. ",
+                        desc: "Access the official introductory follow-along guide to Euphoric Flashcards. There, you'll also find links to the repo and docs. ",
                         render: (setting: Setting): void => {
                             setting.addButton(btn => {
                                 btn.setButtonText("Open Guide")
@@ -131,25 +131,29 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 },
             },
 
-            // Review
+            // Learn
             {
                 type: "group",
-                heading: "Review",
+                heading: "Learn",
                 items: [
                     {
-                        name: "Show interval on buttons",
-                        desc: "Display a preview of the resulting interval on buttons during review. e.g. '4d', '1d', '3.5m'",
+                        name: "Groups per session",
+                        desc: "The default number of card groups appearing per Learn session. Card groups are sets of 4-8 flashcards that you first review, then train sentence forming in Conjure Sentence exercises with. The current group's amount of cards and the total amount of groups in the active session is displayed in the upper right durring Learn mode.",
                         control: {
-                            type: "toggle",
-                            key: "showIntervalOnButtons",
+                            type: "slider",
+                            key: "learnGroupsPerSession",
+                            min: 1,
+                            max: 10,
+                            step: 1,
                         },
                     },
                     {
-                        name: "Show keybindings on desktop",
-                        desc: "Show the keyboard shortcut number on each review button (1, 2, 3). Keybindings remain functional regardless of visibility. Always hidden on mobile device.",
+                        name: "Card side for conjuring sentences",
+                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native / proficient language. (e.g. If you use the syntax 'word - translation', then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word in your target language, then apply it. This setting only applies if the Learn mode session itself is intiated as 'Shuffle' (default) in the explorer.",
                         control: {
-                            type: "toggle",
-                            key: "showKeybindingsOnDesktop",
+                            type: "dropdown",
+                            key: "learnSentenceSide",
+                            options: { Default: "Default", Front: "Front", Back: "Back" },
                         },
                     },
                 ],
@@ -167,7 +171,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             type: "slider",
                             key: "conjureSentencesWordCount",
                             min: 1,
-                            max: 17,
+                            max: 6,
                             step: 1,
                         },
                     },
@@ -191,35 +195,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 ],
             },
 
-            // Learn
-            {
-                type: "group",
-                heading: "Learn",
-                items: [
-                    {
-                        name: "Groups per session",
-                        desc: "Number of card groups (up to 8 cards each) completed per Learn session. Overridable per-session in the Explorer.",
-                        control: {
-                            type: "slider",
-                            key: "learnGroupsPerSession",
-                            min: 1,
-                            max: 10,
-                            step: 1,
-                        },
-                    },
-                    {
-                        name: "Default card side",
-                        desc: "Which face is prompted in Learn. Shuffle randomises per card.",
-                        control: {
-                            type: "dropdown",
-                            key: "defaultLearnSide",
-                            options: { Shuffle: "Shuffle", Front: "Front", Back: "Back" },
-                        },
-                    },
-                ],
-            },
-
-            // Construction Constraints
+            // Construction Constraints (sits directly under the Conjure
+            // Sentences group so it visually attaches to the toggle above).
             {
                 type: "list",
                 heading: "Construction Constraints",
@@ -363,6 +340,22 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 type: "group",
                 heading: "Appearance",
                 items: [
+                    {
+                        name: "Show interval on buttons",
+                        desc: "Display a preview of the resulting interval on buttons during review. (e.g. 4d, 15d, 3.5m)",
+                        control: {
+                            type: "toggle",
+                            key: "showIntervalOnButtons",
+                        },
+                    },
+                    {
+                        name: "Show keybindings on desktop",
+                        desc: "Show the keyboard shortcut number on each review button (1, 2, 3). Keybindings remain functional regardless of visibility. Always hidden on mobile device.",
+                        control: {
+                            type: "toggle",
+                            key: "showKeybindingsOnDesktop",
+                        },
+                    },
                     {
                         name: "Animation duration",
                         desc: "Duration in milliseconds for subtle animations throughout Euphoric Flashcards' features. Set to 0 to disable all animations. Respects reduced motion.",

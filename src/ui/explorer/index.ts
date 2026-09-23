@@ -124,10 +124,10 @@ export class ExplorerModal extends Modal {
                 row.createSpan({ text: "Review Mode", cls: "ef-settings-label" });
                 const sel = row.createEl("select", { cls: "ef-settings-select" });
                 const modes: [ReviewMode, string][] = [
-                    ["Review", "Review"],
-                    ["Cram", "Cram"],
                     ["Learn", "Learn"],
+                    ["Review", "Review"],
                     ["ConjureSentences", "Conjure Sentences"],
+                    ["Cram", "Cram"],
                 ];
                 for (const [val, label] of modes) {
                     const opt = sel.createEl("option", { text: label });
