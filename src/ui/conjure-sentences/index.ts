@@ -4,13 +4,14 @@ import { buildDeckTree, flattenDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { loadCardsForDeck } from "src/ui/review/load-cards";
 import type { ReviewCard } from "src/ui/review/load-cards";
-import { frontFace, backFace, cardReveal } from "src/parsing";
 import type { ParsedCard } from "src/parsing";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import { fisherYates } from "src/utils/shuffle";
 import { resolveFaceIndex } from "src/utils/face";
+import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
+import { renderWordRow } from "src/ui/shared/word-row";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -99,26 +100,10 @@ export class ConjureSentencesModal extends Modal {
         }
 
         this.allCards = await loadCardsForDeck(this.app.vault, selectionNode, rootTags);
-        this.constraintPool = this.buildConstraintPool();
+        this.constraintPool = buildConstructionConstraintPool(this.plugin.data.settings, this.options.selectionDeckTag);
         this.contentEl.empty();
         this.buildLayout();
         this.drawWords();
-    }
-
-    private buildConstraintPool(): string[] {
-        const settings = this.plugin.data.settings;
-        if (!settings.enableConstructionConstraints) return [];
-        const target = this.options.selectionDeckTag.replace(/^#/, "").toLowerCase();
-        const pool: string[] = [];
-        for (const cc of settings.constructionConstraints) {
-            const match = cc.deckTags.some(t => {
-                const bound = t.replace(/^#/, "").toLowerCase();
-                if (bound.length === 0) return false;
-                return target === bound || target.startsWith(bound + "/");
-            });
-            if (match) pool.push(...cc.labels);
-        }
-        return pool;
     }
 
     private buildLayout(): void {
@@ -191,7 +176,7 @@ export class ConjureSentencesModal extends Modal {
         }
 
         for (const item of words) {
-            const row = this.renderWordItem(wordListEl, item);
+            const row = renderWordRow(wordListEl, item, this.plugin.data.settings);
             staggerIn(row, idx++);
         }
     }
@@ -236,52 +221,4 @@ export class ConjureSentencesModal extends Modal {
             .map(toWordItem);
     }
 
-    private renderWordItem(container: HTMLElement, item: WordItem): HTMLElement {
-        const settings = this.plugin.data.settings;
-        const face = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
-        const reveal = cardReveal(item.card);
-
-        const row = container.createDiv({ cls: "ef-cs-word-row" });
-
-        const promptRow = row.createDiv({ cls: "ef-cs-prompt-row" });
-        promptRow.createSpan({ text: face.prompt, cls: "ef-cs-word-text" });
-
-        const revealBtn = promptRow.createEl("button", { cls: "ef-btn ef-cs-reveal-btn" });
-        const revealBtnIcon = revealBtn.createSpan({ cls: "ef-btn-icon" });
-        setIcon(revealBtnIcon, "eye");
-        revealBtn.createSpan({ text: "Reveal" });
-
-        const revealArea = row.createDiv({ cls: "ef-cs-reveal-area ef-hidden" });
-
-        revealArea.createDiv({ cls: "ef-card-answer-line" }, line => {
-            line.createSpan({ text: face.answer, cls: "ef-cs-word-answer" });
-            if (reveal.type) {
-                const tc = settings.cardTypes.find(t => t.key === reveal.type);
-                const badge = line.createSpan({
-                    text: tc?.label ?? reveal.type,
-                    cls: "ef-type-badge",
-                });
-                badge.setCssStyles({ backgroundColor: tc?.color ?? "var(--background-modifier-border)" });
-            }
-        });
-
-        if (reveal.explanation) {
-            revealArea.createEl("p", { text: reveal.explanation, cls: "ef-explanation" });
-        }
-        if (reveal.examples.length > 0) {
-            const list = revealArea.createDiv({ cls: "ef-examples" });
-            for (const ex of reveal.examples) {
-                list.createDiv({ text: `"${ex}"`, cls: "ef-example-item" });
-            }
-        }
-
-        revealBtn.addEventListener("click", () => {
-            const isHidden = revealArea.hasClass("ef-hidden");
-            revealArea.toggleClass("ef-hidden", !isHidden);
-            setIcon(revealBtnIcon, isHidden ? "eye-off" : "eye");
-            if (isHidden) staggerIn(revealArea, 0);
-        });
-
-        return row;
-    }
 }

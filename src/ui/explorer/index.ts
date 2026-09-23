@@ -4,6 +4,7 @@ import { buildDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { ReviewModal } from "src/ui/review/index";
 import { ConjureSentencesModal } from "src/ui/conjure-sentences/index";
+import { LearnModal } from "src/ui/learn/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import type { CardSide, WordSelection, ReviewMode } from "src/settings";
 
@@ -300,8 +301,11 @@ export class ExplorerModal extends Modal {
             return;
         }
         if (this.mode === "Learn") {
-            // Phase 5 wires this to LearnModal with { cardSide: this.learnSide,
-            // groupLimit: this.learnGroups, selectionDeckTag: node.tag }.
+            new LearnModal(this.app, this.plugin, node, {
+                cardSide: this.learnSide,
+                groupLimit: this.learnGroups,
+                selectionDeckTag: node.tag,
+            }).open();
             return;
         }
         const side = this.mode === "Cram" ? this.cramSide : this.cardSide;
