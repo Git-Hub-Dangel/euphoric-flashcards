@@ -219,18 +219,20 @@
     color: var(--interactive-accent);
 }
 
+/* ── Explorer body: shared horizontal padding for settings + deck list ── */
+.ef-explorer-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 12px 24px 0;
+    gap: 12px;
+    overflow: hidden;
+}
+
 /* ── Review Settings section ──────────────────────────────── */
 .ef-review-settings {
-    padding: 12px 24px 4px;
     flex-shrink: 0;
-}
-.ef-settings-heading {
-    font-size: 0.75em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
-    margin-bottom: 8px;
 }
 .ef-settings-row {
     display: flex;
@@ -253,16 +255,6 @@
     color: var(--text-normal);
 }
 .ef-settings-input { width: 60px; }
-.ef-settings-panel { padding-bottom: 10px; }
-
-/* ── Section title (e.g. "Decks") ────────────────────────── */
-.ef-section-title {
-    padding: 22px 24px 10px;
-    font-size: 1.5em;
-    font-weight: 700;
-    color: var(--text-normal);
-    flex-shrink: 0;
-}
 
 /* ── Deck list ────────────────────────────────────────────── */
 .ef-deck-list-wrap {
@@ -279,8 +271,7 @@
     grid-template-columns: minmax(0, 1fr) 56px 56px 56px 56px;
     align-items: center;
     gap: 8px;
-    padding: 8px 20px;
-    border-bottom: 1px solid var(--background-modifier-border);
+    padding: 8px 0;
     background: transparent;
     font-size: 0.72em;
     font-weight: 700;
@@ -301,7 +292,7 @@
     grid-template-columns: minmax(0, 1fr) 56px 56px 56px 56px;
     align-items: center;
     gap: 8px;
-    padding: 8px 20px;
+    padding: 8px 0;
     border-radius: 6px;
     cursor: pointer;
     transition: background 0.1s;
@@ -342,8 +333,8 @@
 
 .ef-stat-total { color: var(--text-normal); }
 .ef-stat-seen  { color: var(--text-muted); }
-.ef-stat-due   { color: #e53935; }
-.ef-stat-new   { color: #1e88e5; }
+.ef-stat-due   { color: var(--interactive-accent); }
+.ef-stat-new   { color: color-mix(in srgb, var(--interactive-accent) 50%, var(--text-muted)); }
 
 .ef-empty-state {
     padding: 40px;
@@ -354,16 +345,15 @@
 /* ── Narrow viewport (mobile, split panes) ────────────────── */
 @media (max-width: 600px) {
     .ef-explorer-header { padding: 10px 14px; }
-    .ef-review-settings { padding: 10px 14px 2px; }
+    .ef-explorer-body { padding: 8px 14px 0; gap: 8px; }
     .ef-settings-row { gap: 8px; }
     .ef-settings-label { min-width: 88px; }
-    .ef-section-title { padding: 14px 14px 6px; font-size: 1.25em; }
 
     .ef-deck-header,
     .ef-deck-row {
         grid-template-columns: minmax(0, 1fr) 40px 40px 40px 40px;
         gap: 4px;
-        padding: 8px 12px;
+        padding: 8px 0;
     }
     .ef-deck-stat-col { font-size: 0.82em; }
     .ef-deck-header { font-size: 0.65em; letter-spacing: 0.05em; }
@@ -373,7 +363,7 @@
     .ef-deck-header,
     .ef-deck-row {
         grid-template-columns: minmax(0, 1fr) 34px 34px 34px;
-        padding: 8px 10px;
+        padding: 8px 0;
     }
     /* Hide "Seen" — derivable from Total − New. */
     .ef-deck-header .ef-stat-seen,

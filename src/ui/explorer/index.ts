@@ -115,10 +115,11 @@ export class ExplorerModal extends Modal {
         });
         staggerIn(headerEl, 0);
 
-        // ── Review Settings ──────────────────────────────────────────────────
-        const settingsEl = this.contentEl.createDiv({ cls: "ef-review-settings" }, section => {
-            section.createDiv({ text: "Review Settings", cls: "ef-settings-heading" });
+        // ── Body (shared horizontal padding for settings + deck list) ───────
+        const bodyEl = this.contentEl.createDiv({ cls: "ef-explorer-body" });
 
+        // ── Review Settings ──────────────────────────────────────────────────
+        const settingsEl = bodyEl.createDiv({ cls: "ef-review-settings" }, section => {
             section.createDiv({ cls: "ef-settings-row" }, row => {
                 row.createSpan({ text: "Review Mode", cls: "ef-settings-label" });
                 const sel = row.createEl("select", { cls: "ef-settings-select" });
@@ -149,11 +150,8 @@ export class ExplorerModal extends Modal {
         // ── Deck list ────────────────────────────────────────────────────────
         this.roots = [...tree.values()].filter(n => n.stats.total > 0);
 
-        const sectionTitle = this.contentEl.createDiv({ text: "Decks", cls: "ef-section-title" });
-        staggerIn(sectionTitle, 2);
-
-        const wrap = this.contentEl.createDiv({ cls: "ef-deck-list-wrap" });
-        staggerIn(wrap, 3);
+        const wrap = bodyEl.createDiv({ cls: "ef-deck-list-wrap" });
+        staggerIn(wrap, 2);
 
         // Sticky header row with column labels
         wrap.createDiv({ cls: "ef-deck-header" }, h => {
@@ -248,8 +246,8 @@ export class ExplorerModal extends Modal {
         const nameCell = row.createDiv({ cls: "ef-deck-name-cell" });
         nameCell.setCssStyles({ paddingLeft: `${depth * 20}px` });
 
-        const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
         if (hasChildren) {
+            const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
             setIcon(chevron, "chevron-right");
             chevron.addClass("ef-deck-chevron-active");
             if (isExpanded) chevron.addClass("is-open");
