@@ -154,8 +154,14 @@ export class LearnModal extends Modal {
         const p = this.session.getGroupProgress();
         const gc = this.session.getGroupsCompleted();
         const gl = this.session.getGroupLimit();
+        // Display the currently active group (1-indexed) rather than the
+        // completed count, so the first group of two reads 1/2 not 0/2.
+        // When a group is active (p.total > 0), that's gc + 1; on the done
+        // screen we fall back to gc (which may overflow gl when a carryover
+        // triggered a group past the effectiveLimit).
+        const activeGroup = p.total > 0 ? gc + 1 : gc;
         right.createSpan({
-            text: `${p.cleared}/${p.total}  ·  ${gc}/${gl}`,
+            text: `${p.cleared}/${p.total}  ·  ${activeGroup}/${gl}`,
             cls: "ef-review-progress ef-progress-flash",
         });
     }

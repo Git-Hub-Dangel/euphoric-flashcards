@@ -13,6 +13,7 @@ import {
 } from "src/learn/group-state";
 import type { LearnCardHistory, LearnItem } from "src/learn/group-state";
 import { buildLearnGroup } from "src/learn/group-builder";
+import { LEARN_GROUP_SIZE } from "src/learn/constants";
 import { selectCarryover } from "src/learn/carryover";
 import {
     computeTaskCount,
@@ -69,6 +70,12 @@ interface GroupContext {
 export class LearnSession {
     private readonly pools: LearnPools;
     private readonly opts: LearnSessionOptions;
+    // Displayed denominator. Fixed at construction from the reviewable pool
+    // supply so the counter never promises groups the deck cannot fund. The
+    // configured opts.groupLimit remains the hard terminal cap; a carryover
+    // that spills past effectiveLimit but stays within groupLimit is allowed
+    // and simply overflows the counter (e.g. 3/2).
+    private readonly effectiveLimit: number;
 
     private readonly used = new Set<ParsedCard>();
     private readonly carried = new Set<ParsedCard>();
@@ -92,6 +99,13 @@ export class LearnSession {
     constructor(pools: LearnPools, opts: LearnSessionOptions) {
         this.pools = pools;
         this.opts = opts;
+        const totalReviewable =
+            pools.newCards.length +
+            pools.matureDue.length +
+            pools.youngDue.length +
+            pools.youngFiller.length;
+        const poolGroups = Math.max(1, Math.ceil(totalReviewable / LEARN_GROUP_SIZE));
+        this.effectiveLimit = Math.min(opts.groupLimit, poolGroups);
     }
 
     start(): void {
@@ -252,7 +266,7 @@ export class LearnSession {
     }
 
     getGroupLimit(): number {
-        return this.opts.groupLimit;
+        return this.effectiveLimit;
     }
 
     // Number of cleared faces vs total faces in the current group (0/0 when
