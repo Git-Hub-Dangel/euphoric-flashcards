@@ -4,15 +4,15 @@ import { buildDeckTree, flattenDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { loadCardsForDeck } from "src/ui/review/load-cards";
 import type { ReviewCard } from "src/ui/review/load-cards";
-import type { ParsedCard } from "src/parsing";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import { fisherYates } from "src/utils/shuffle";
 import { resolveFaceIndex } from "src/utils/face";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
-import { renderWordRow } from "src/ui/shared/word-row";
 import { renderResponseButton } from "src/ui/shared/response-button";
+import { createSentenceList, redrawSentence } from "src/ui/shared/sentence-view";
+import type { SentenceWord } from "src/ui/shared/sentence-view";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -21,17 +21,13 @@ export interface ConjureSentencesOptions {
     selectionDeckTag: string;
 }
 
-interface WordItem {
-    card: ParsedCard;
-    faceIndex: 0 | 1;
-}
-
 export class ConjureSentencesModal extends Modal {
     private readonly plugin: EuphoricFlashcardsPlugin;
     private readonly options: ConjureSentencesOptions;
 
     private allCards: ReviewCard[] = [];
     private wordListEl: HTMLElement | null = null;
+    private footerEl: HTMLElement | null = null;
     private constraintPool: string[] = [];
 
     constructor(
@@ -116,20 +112,10 @@ export class ConjureSentencesModal extends Modal {
         });
         staggerIn(headerEl, 0);
 
-        this.wordListEl = this.contentEl.createDiv({ cls: "ef-cs-word-list" });
+        this.wordListEl = createSentenceList(this.contentEl);
 
-        const footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" }, footer => {
-            const settings = this.plugin.data.settings;
-            renderResponseButton(footer, settings, {
-                keyNum: 1, label: "Regenerate", cls: "ef-btn-regen", icon: "refresh-cw",
-                onClick: () => this.drawWords(),
-            });
-            renderResponseButton(footer, settings, {
-                keyNum: 2, label: "Good", cls: "ef-btn-good", icon: "check",
-                onClick: () => this.drawWords(),
-            });
-        });
-        staggerIn(footerEl, 1);
+        this.footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" });
+        staggerIn(this.footerEl, 1);
 
         this.scope.register([], "1", () => { this.drawWords(); return false; });
         this.scope.register([], "2", () => { this.drawWords(); return false; });
@@ -137,48 +123,39 @@ export class ConjureSentencesModal extends Modal {
 
     private drawWords(): void {
         if (!this.wordListEl) return;
-        const wordListEl = this.wordListEl;
-        const existingPill = wordListEl.querySelector<HTMLElement>(".ef-cc-pill");
-        const doDraw = (): void => this.renderDraw(wordListEl);
-        if (existingPill && this.plugin.data.settings.animationDurationMs > 0) {
-            existingPill.addClass("ef-fading");
-            window.setTimeout(doDraw, 100);
-        } else {
-            doDraw();
-        }
+        redrawSentence(this.wordListEl, {
+            settings: this.plugin.data.settings,
+            constraintPool: this.constraintPool,
+            words: () => this.selectWords(),
+            emptyText: "No cards in selection deck.",
+            renderChrome: () => this.renderActions(),
+        });
     }
 
-    private renderDraw(wordListEl: HTMLElement): void {
-        const words = this.selectWords();
-        wordListEl.empty();
-
-        if (words.length === 0) {
-            wordListEl.createEl("p", { text: "No cards in selection deck.", cls: "ef-loading" });
-            return;
-        }
-
-        let idx = 0;
-        const label = this.constraintPool[Math.floor(Math.random() * this.constraintPool.length)];
-        if (label !== undefined) {
-            const pillWrap = wordListEl.createDiv({ cls: "ef-cc-pill-wrap" }, wrap => {
-                wrap.createSpan({ text: label, cls: "ef-cc-pill" });
-            });
-            staggerIn(pillWrap, idx++);
-        }
-
-        for (const item of words) {
-            const row = renderWordRow(wordListEl, item, this.plugin.data.settings);
-            staggerIn(row, idx++);
-        }
+    // Rebuilt on every draw so the buttons replay their entrance, giving the
+    // same tap feedback Learn has. Key bindings live on the scope, so
+    // discarding the elements does not drop them.
+    private renderActions(): void {
+        if (!this.footerEl) return;
+        this.footerEl.empty();
+        const settings = this.plugin.data.settings;
+        renderResponseButton(this.footerEl, settings, {
+            keyNum: 1, label: "Regenerate", cls: "ef-btn-regen", icon: "refresh-cw",
+            onClick: () => this.drawWords(),
+        });
+        renderResponseButton(this.footerEl, settings, {
+            keyNum: 2, label: "Good", cls: "ef-btn-good", icon: "check",
+            onClick: () => this.drawWords(),
+        });
     }
 
-    private selectWords(): WordItem[] {
+    private selectWords(): SentenceWord[] {
         const { wordCount, wordSelection, cardSide } = this.options;
 
         // orientation once per sentence for all cards
         const faceIndex = resolveFaceIndex(cardSide);
 
-        const toWordItem = (rc: ReviewCard): WordItem => ({ card: rc.card, faceIndex });
+        const toSentenceWord = (rc: ReviewCard): SentenceWord => ({ card: rc.card, faceIndex });
 
         if (wordSelection === "Optimised") {
             const mature = this.allCards.filter(
@@ -203,13 +180,13 @@ export class ConjureSentencesModal extends Modal {
                 picked.push(...leftover.slice(0, wordCount - picked.length));
             }
 
-            return fisherYates(picked).map(toWordItem);
+            return fisherYates(picked).map(toSentenceWord);
         }
 
         // Random
         return fisherYates([...this.allCards])
             .slice(0, Math.min(wordCount, this.allCards.length))
-            .map(toWordItem);
+            .map(toSentenceWord);
     }
 
 }

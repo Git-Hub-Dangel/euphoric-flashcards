@@ -593,6 +593,8 @@
     color: var(--interactive-accent);
 }
 
+/* Shared sentence surface for Conjure Sentences and Learn. Full width on
+   phones, capped at a comfortable reading width and centred above that. */
 .ef-cs-word-list {
     flex: 1;
     overflow-y: auto;
@@ -600,6 +602,18 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+}
+
+/* Learn hosts the sentence list inside the card body. Neutralise the body's
+   centring and padding so the list governs its own layout. */
+.ef-card-body.ef-sentence-body {
+    padding: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
 }
 
 /* Construction constraint pill — shown above the word list when enabled and

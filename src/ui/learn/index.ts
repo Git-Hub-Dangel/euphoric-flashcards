@@ -1,4 +1,4 @@
-import { App, Modal, Platform, setIcon } from "obsidian";
+import { App, Modal, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
@@ -20,7 +20,8 @@ import type { LearnItem } from "src/learn/group-state";
 import type { WriteIntent } from "src/learn/session";
 import type { SentenceWordSelection } from "src/learn/sentence-planner";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
-import { renderWordRow } from "src/ui/shared/word-row";
+import { createSentenceList, drawSentence, redrawSentence } from "src/ui/shared/sentence-view";
+import type { SentenceWord, SentenceDrawOptions } from "src/ui/shared/sentence-view";
 import { renderResponseButton } from "src/ui/shared/response-button";
 
 export interface LearnModalOptions {
@@ -57,6 +58,7 @@ export class LearnModal extends Modal {
     private headerEl: HTMLElement | null = null;
     private bodyEl: HTMLElement | null = null;
     private footerEl: HTMLElement | null = null;
+    private sentenceListEl: HTMLElement | null = null;
 
     constructor(app: App, plugin: EuphoricFlashcardsPlugin, node: DeckNode, options: LearnModalOptions) {
         super(app);
@@ -191,6 +193,8 @@ export class LearnModal extends Modal {
         this.renderHeader(item);
 
         this.bodyEl.empty();
+        this.bodyEl.removeClass("ef-sentence-body");
+        this.sentenceListEl = null;
         const face: CardFace = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
         const reveal = cardReveal(item.card);
         const settings = this.plugin.data.settings;
@@ -318,23 +322,34 @@ export class LearnModal extends Modal {
         this.clearKeymap();
         this.revealed = false;
 
-        this.renderHeader(null);
+        const picks: SentenceWord[] = words.map(w => ({ card: w.card, faceIndex: w.faceIndex }));
+        const drawOpts: SentenceDrawOptions = {
+            settings: this.plugin.data.settings,
+            constraintPool: this.constraintPool,
+            words: () => picks,
+            emptyText: "No words available.",
+            renderChrome: () => {
+                this.renderHeader(null);
+                this.renderSentenceActions();
+            },
+        };
 
-        this.bodyEl.empty();
-        const listEl = this.bodyEl.createDiv({ cls: "ef-cs-word-list" });
-        let idx = 0;
-        const label = this.constraintPool[Math.floor(Math.random() * this.constraintPool.length)];
-        if (label !== undefined) {
-            const pillWrap = listEl.createDiv({ cls: "ef-cc-pill-wrap" }, wrap => {
-                wrap.createSpan({ text: label, cls: "ef-cc-pill" });
-            });
-            staggerIn(pillWrap, idx++);
-        }
-        for (const w of words) {
-            const row = renderWordRow(listEl, { card: w.card, faceIndex: w.faceIndex }, this.plugin.data.settings);
-            staggerIn(row, idx++);
+        // Consecutive sentence steps reuse the list so the pill can fade across
+        // a regenerate. Arriving from a face view builds it fresh.
+        if (this.sentenceListEl) {
+            redrawSentence(this.sentenceListEl, drawOpts);
+        } else {
+            this.bodyEl.empty();
+            this.bodyEl.addClass("ef-sentence-body");
+            this.sentenceListEl = createSentenceList(this.bodyEl);
+            drawSentence(this.sentenceListEl, drawOpts);
         }
 
+        this.firstRender = false;
+    }
+
+    private renderSentenceActions(): void {
+        if (!this.footerEl) return;
         this.footerEl.empty();
         const onGood = (): void => {
             if (!this.session) return;
@@ -348,8 +363,6 @@ export class LearnModal extends Modal {
         };
         this.addResponseButton(this.footerEl, 1, "Regenerate", "ef-btn-regen", "refresh-cw", null, onRegen);
         this.addResponseButton(this.footerEl, 2, "Good", "ef-btn-good", "check", null, onGood);
-
-        this.firstRender = false;
     }
 
     private openEditCardModal(item: LearnItem): void {
@@ -397,6 +410,7 @@ export class LearnModal extends Modal {
     private renderDone(groupsCompleted: number): void {
         this.clearKeymap();
         this.contentEl.empty();
+        this.sentenceListEl = null;
         this.contentEl.createDiv({ cls: "ef-done" }, div => {
             staggerIn(div.createEl("h2", { text: "Session complete!" }), 0);
             staggerIn(div.createEl("p", {

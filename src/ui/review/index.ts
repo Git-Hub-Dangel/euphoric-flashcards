@@ -1,4 +1,4 @@
-import { App, Modal, Platform, setIcon } from "obsidian";
+import { App, Modal, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
