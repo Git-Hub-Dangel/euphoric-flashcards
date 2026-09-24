@@ -23,10 +23,10 @@ import {
 } from "src/learn/sentence-planner";
 import type { SentenceWordSelection } from "src/learn/sentence-planner";
 import { resolveFaceIndex } from "src/utils/face";
-import type { CardSide, LearnSentenceSide } from "src/settings";
+import type { LearnSentenceSide } from "src/settings";
 
 export type LearnStep =
-    | { kind: "face"; item: LearnItem; isPostAgain: boolean; groupSize: number }
+    | { kind: "face"; item: LearnItem; isPostAgain: boolean }
     | { kind: "sentence"; words: SentenceWordSelection[] }
     | { kind: "done"; groupsCompleted: number };
 
@@ -45,10 +45,8 @@ export interface FaceAnswerOutcome {
 export interface LearnSessionOptions {
     groupLimit: number;
     wordCount: number;
-    cardSide: CardSide;
-    // When cardSide is "Shuffle", sentence draws pick a face uniformly per
-    // draw. A non-Default value here forces every sentence draw to that face
-    // instead. Ignored when cardSide is "Front"/"Back" (already fixed).
+    // Learn always quizzes both faces. Sentence draws roll a face per draw
+    // unless this pins them to one.
     sentenceSide?: LearnSentenceSide;
     today: Date;
     rng: () => number;
@@ -132,12 +130,11 @@ export class LearnSession {
             kind: "face",
             item,
             isPostAgain: this.isFacePending(item),
-            groupSize: this.group.cards.length,
         };
     }
 
     // True iff the face currently sits in its card's pendingFaces set.
-    isFacePending(item: LearnItem): boolean {
+    private isFacePending(item: LearnItem): boolean {
         if (this.group === null) return false;
         const h = this.group.histories.get(item.card);
         return h !== undefined && h.pendingFaces.has(item.faceIndex);
@@ -261,10 +258,6 @@ export class LearnSession {
         return out;
     }
 
-    isDone(): boolean {
-        return this.done;
-    }
-
     getGroupsCompleted(): number {
         return this.groupsCompleted;
     }
@@ -362,14 +355,13 @@ export class LearnSession {
             const h = g.histories.get(loc.card);
             return h !== undefined && isEligibleForSentences(h);
         });
-        // When Learn's active side is Shuffle, an explicit sentenceSide of
-        // Front/Back pins the face for this draw instead of rolling per-draw.
+        // One face per draw, shared by every word in it.
         let faceIndex: 0 | 1;
         const override = this.opts.sentenceSide;
-        if (this.opts.cardSide === "Shuffle" && override !== undefined && override !== "Default") {
+        if (override !== undefined && override !== "Default") {
             faceIndex = override === "Front" ? 0 : 1;
         } else {
-            faceIndex = resolveFaceIndex(this.opts.cardSide, this.opts.rng);
+            faceIndex = resolveFaceIndex("Shuffle", this.opts.rng);
         }
         return pickSentenceWords({
             eligible,

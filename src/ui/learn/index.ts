@@ -6,7 +6,6 @@ import { SRAlgorithmOsr, textInterval } from "src/scheduling/osr";
 import { withUpdatedSchedules, frontFace, backFace, cardReveal, parseCard } from "src/parsing";
 import type { CardFace } from "src/parsing";
 import type { ScheduleInfo } from "src/persistence";
-import type { CardSide } from "src/settings";
 import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
 import { previewInterval, applyResponse } from "src/scheduling/session-helpers";
@@ -24,7 +23,6 @@ import { buildConstructionConstraintPool } from "src/ui/shared/construction-cons
 import { renderWordRow } from "src/ui/shared/word-row";
 
 export interface LearnModalOptions {
-    cardSide: CardSide;
     groupLimit: number;
     selectionDeckTag: string;
 }
@@ -122,7 +120,6 @@ export class LearnModal extends Modal {
         this.session = new LearnSession(pools, {
             groupLimit: this.options.groupLimit,
             wordCount: s.conjureSentencesWordCount,
-            cardSide: this.options.cardSide,
             sentenceSide: s.learnSentenceSide,
             today,
             rng: Math.random,

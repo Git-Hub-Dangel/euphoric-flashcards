@@ -4,7 +4,7 @@ import { classifyPools } from "src/learn/pool";
 import { LearnSession } from "src/learn/session";
 import type { FaceAnswer, LearnStep } from "src/learn/session";
 import { makeCard, sched } from "src/learn/test-helpers";
-import type { CardSide, LearnSentenceSide } from "src/settings";
+import type { LearnSentenceSide } from "src/settings";
 
 const TODAY = new Date("2026-01-15T00:00:00Z");
 
@@ -45,7 +45,6 @@ describe("LearnSession — write eligibility", () => {
         const session = new LearnSession(pools, {
             groupLimit: 1,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         });
@@ -81,7 +80,6 @@ describe("LearnSession — write eligibility", () => {
         const session = new LearnSession(pools, {
             groupLimit: 1,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         });
@@ -115,7 +113,6 @@ describe("LearnSession — write eligibility", () => {
         const session2 = new LearnSession(pools2, {
             groupLimit: 1,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng: mulberry32(7),
         });
@@ -146,7 +143,6 @@ describe("LearnSession — carryover", () => {
         const session = new LearnSession(pools, {
             groupLimit: 2,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         });
@@ -192,7 +188,6 @@ describe("LearnSession — effectiveLimit", () => {
         return new LearnSession(classifyPools(cards, TODAY, rng), {
             groupLimit,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         }).getGroupLimit();
@@ -229,7 +224,6 @@ describe("LearnSession — effectiveLimit", () => {
         const session = new LearnSession(classifyPools(cards, TODAY, rng), {
             groupLimit: 3,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         });
@@ -248,7 +242,6 @@ describe("LearnSession — effectiveLimit", () => {
         const session = new LearnSession(classifyPools(cards, TODAY, rng), {
             groupLimit: 3,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         });
@@ -280,7 +273,7 @@ describe("LearnSession — effectiveLimit", () => {
 
         expect(session.getGroupsCompleted()).toBe(3);
         expect(session.getGroupsCompleted()).toBeGreaterThan(session.getGroupLimit());
-        expect(session.isDone()).toBe(true);
+        expect(session.nextStep().kind).toBe("done");
     });
 
     it("cannot overflow when effectiveLimit equals the configured limit", () => {
@@ -291,7 +284,6 @@ describe("LearnSession — effectiveLimit", () => {
         const session = new LearnSession(classifyPools(cards, TODAY, rng), {
             groupLimit: 2,
             wordCount: 1,
-            cardSide: "Front",
             today: TODAY,
             rng,
         });
@@ -309,17 +301,17 @@ describe("LearnSession — effectiveLimit", () => {
         });
 
         expect(session.getGroupsCompleted()).toBe(2);
-        expect(session.isDone()).toBe(true);
+        expect(session.nextStep().kind).toBe("done");
     });
 });
 
-// Invariant 28. sentenceSide pins the sentence face only under Shuffle; on a
-// monodirectional Learn side the setting is inert.
+// Invariant 28. Learn is permanently bidirectional, so sentenceSide is the
+// only face-direction control: Front/Back pin every draw, Default rolls one
+// face per draw.
 describe("LearnSession — sentenceSide override", () => {
     // Runs one group, collecting the faceIndex of every sentence draw
     // (initial plus `redraws` regenerations of each task).
     function collectSentenceFaces(opts: {
-        cardSide: CardSide;
         sentenceSide?: LearnSentenceSide;
         seed: number;
         redraws: number;
@@ -328,7 +320,6 @@ describe("LearnSession — sentenceSide override", () => {
         const session = new LearnSession(classifyPools(newCards(8, "s"), TODAY, rng), {
             groupLimit: 1,
             wordCount: 2,
-            cardSide: opts.cardSide,
             sentenceSide: opts.sentenceSide,
             today: TODAY,
             rng,
@@ -359,9 +350,8 @@ describe("LearnSession — sentenceSide override", () => {
         return { faces, draws };
     }
 
-    it("pins every sentence draw to the front face under Shuffle", () => {
+    it("pins every sentence draw to the front face", () => {
         const { faces, draws } = collectSentenceFaces({
-            cardSide: "Shuffle",
             sentenceSide: "Front",
             seed: 41,
             redraws: 20,
@@ -370,9 +360,8 @@ describe("LearnSession — sentenceSide override", () => {
         expect([...faces]).toEqual([0]);
     });
 
-    it("pins every sentence draw to the back face under Shuffle", () => {
+    it("pins every sentence draw to the back face", () => {
         const { faces, draws } = collectSentenceFaces({
-            cardSide: "Shuffle",
             sentenceSide: "Back",
             seed: 41,
             redraws: 20,
@@ -381,10 +370,9 @@ describe("LearnSession — sentenceSide override", () => {
         expect([...faces]).toEqual([1]);
     });
 
-    it("keeps the per-draw roll under Shuffle when the override is Default", () => {
+    it("keeps the per-draw roll when the override is Default", () => {
         for (const sentenceSide of ["Default", undefined] as const) {
             const { faces, draws } = collectSentenceFaces({
-                cardSide: "Shuffle",
                 sentenceSide,
                 seed: 41,
                 redraws: 40,
@@ -392,25 +380,5 @@ describe("LearnSession — sentenceSide override", () => {
             expect(draws).toBeGreaterThan(0);
             expect([...faces].sort()).toEqual([0, 1]);
         }
-    });
-
-    it("is inert on a monodirectional Learn side", () => {
-        const front = collectSentenceFaces({
-            cardSide: "Front",
-            sentenceSide: "Back",
-            seed: 41,
-            redraws: 20,
-        });
-        expect(front.draws).toBeGreaterThan(0);
-        expect([...front.faces]).toEqual([0]);
-
-        const back = collectSentenceFaces({
-            cardSide: "Back",
-            sentenceSide: "Front",
-            seed: 41,
-            redraws: 20,
-        });
-        expect(back.draws).toBeGreaterThan(0);
-        expect([...back.faces]).toEqual([1]);
     });
 });

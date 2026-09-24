@@ -34,7 +34,3 @@ export function makeCard(
         filePath: opts.filePath ?? "file.md",
     };
 }
-
-export function resetCardCounter(): void {
-    counter = 0;
-}

@@ -48,7 +48,6 @@ export interface EuphoricSettings {
 
     // Learn
     learnGroupsPerSession: number;
-    defaultLearnSide: CardSide;
     learnSentenceSide: LearnSentenceSide;
 
     // Appearance
@@ -85,7 +84,6 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     constructionConstraints: [],
 
     learnGroupsPerSession: 3,
-    defaultLearnSide: "Shuffle",
     learnSentenceSide: "Default",
 
     animationDurationMs: 240,

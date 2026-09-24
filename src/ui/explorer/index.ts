@@ -16,7 +16,6 @@ export class ExplorerModal extends Modal {
     private cardSide: CardSide;
     private cramSide: CardSide;
     private csSide: CardSide;
-    private learnSide: CardSide;
     private learnGroups: number;
     private wordCount: number;
     private wordSelection: WordSelection;
@@ -40,7 +39,6 @@ export class ExplorerModal extends Modal {
         this.csSide = saved?.conjureSentencesCardSide ?? settings.defaultConjureSentencesSide;
         this.wordSelection = saved?.conjureSentencesSelection ?? settings.conjureSentencesSelection;
         this.wordCount = settings.conjureSentencesWordCount;
-        this.learnSide = saved?.learnCardSide ?? settings.defaultLearnSide;
         this.learnGroups = settings.learnGroupsPerSession;
     }
 
@@ -51,7 +49,6 @@ export class ExplorerModal extends Modal {
             cramCardSide: this.cramSide,
             conjureSentencesCardSide: this.csSide,
             conjureSentencesSelection: this.wordSelection,
-            learnCardSide: this.learnSide,
         };
         void this.plugin.saveData_();
     }
@@ -187,17 +184,16 @@ export class ExplorerModal extends Modal {
         const p = this.settingsPanelEl;
 
         if (this.mode === "ConjureSentences") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.csSide,
+            this.addSelectRow(p, "Card Side", ["Shuffle", "Front", "Back"], this.csSide,
                 v => { this.csSide = v as CardSide; this.persistState(); });
         } else if (this.mode === "Review") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.cardSide,
+            this.addSelectRow(p, "Card Side", ["Shuffle", "Front", "Back"], this.cardSide,
                 v => { this.cardSide = v as CardSide; this.persistState(); });
         } else if (this.mode === "Cram") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.cramSide,
+            this.addSelectRow(p, "Card Side", ["Shuffle", "Front", "Back"], this.cramSide,
                 v => { this.cramSide = v as CardSide; this.persistState(); });
         } else if (this.mode === "Learn") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.learnSide,
-                v => { this.learnSide = v as CardSide; this.persistState(); });
+            // Learn is always shuffled
             const groupOptions = Array.from({ length: 10 }, (_, i) => String(i + 1));
             this.addSelectRow(p, "Groups", groupOptions, String(this.learnGroups),
                 v => { this.learnGroups = parseInt(v, 10); });
@@ -300,7 +296,6 @@ export class ExplorerModal extends Modal {
         }
         if (this.mode === "Learn") {
             new LearnModal(this.app, this.plugin, node, {
-                cardSide: this.learnSide,
                 groupLimit: this.learnGroups,
                 selectionDeckTag: node.tag,
             }).open();
