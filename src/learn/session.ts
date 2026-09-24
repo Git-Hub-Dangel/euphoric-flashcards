@@ -11,7 +11,7 @@ import {
     recordAgain,
     recordClear,
 } from "src/learn/group-state";
-import type { LearnCardHistory, LearnItem } from "src/learn/group-state";
+import type { GroupCardState, LearnItem } from "src/learn/group-state";
 import { buildLearnGroup } from "src/learn/group-builder";
 import { LEARN_GROUP_SIZE } from "src/learn/constants";
 import { selectCarryover } from "src/learn/carryover";
@@ -56,7 +56,7 @@ interface GroupContext {
     cards: CardLocation[];
     queue: LearnItem[];
     idx: number;
-    histories: Map<ParsedCard, LearnCardHistory>;
+    histories: Map<ParsedCard, GroupCardState>;
     thresholds: number[];
     thresholdCursor: number;
     pendingTasks: SentenceWordSelection[][];

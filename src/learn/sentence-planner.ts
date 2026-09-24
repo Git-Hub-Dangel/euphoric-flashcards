@@ -1,14 +1,14 @@
 import type { ParsedCard } from "src/parsing";
 import { ReviewResponse } from "src/scheduling/review-response";
 import type { AnchorLocation, CardLocation } from "src/learn/pool";
-import type { LearnCardHistory } from "src/learn/group-state";
+import type { GroupCardState } from "src/learn/group-state";
 import { LEARN_SENTENCE_TRIGGER } from "src/learn/constants";
 
 // Number of sentence tasks for this group. Fragile groups (many new + Again
 // cards) get more; capped so tasks never exceed ceil(G/2).
 export function computeTaskCount(
     groupCards: readonly ParsedCard[],
-    histories: Map<ParsedCard, LearnCardHistory>,
+    histories: Map<ParsedCard, GroupCardState>,
 ): number {
     const G = groupCards.length;
     if (G === 0) return 0;
@@ -45,7 +45,7 @@ export function tasksFiring(progress: number, thresholds: readonly number[], cur
     return n;
 }
 
-function baseWeight(h: LearnCardHistory | undefined): number {
+function baseWeight(h: GroupCardState | undefined): number {
     if (h === undefined) return 1;
     if (h.againCount >= 1) return 4;
     if (h.wasNew) return 3;
@@ -81,7 +81,7 @@ export interface SentenceWordSelection {
 
 export function pickSentenceWords(opts: {
     eligible: readonly CardLocation[];
-    histories: Map<ParsedCard, LearnCardHistory>;
+    histories: Map<ParsedCard, GroupCardState>;
     appearanceCounts: Map<ParsedCard, number>;
     anchors: readonly AnchorLocation[];
     wordCount: number;

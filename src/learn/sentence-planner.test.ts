@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { mulberry32 } from "src/utils/rng";
 import { ReviewResponse } from "src/scheduling/review-response";
 import { makeCard, sched } from "src/learn/test-helpers";
-import type { LearnCardHistory } from "src/learn/group-state";
+import type { GroupCardState } from "src/learn/group-state";
 import {
     computeTaskCount,
     computeThresholds,
@@ -12,7 +12,7 @@ import {
 } from "src/learn/sentence-planner";
 import type { AnchorLocation } from "src/learn/pool";
 
-function history(overrides: Partial<LearnCardHistory> = {}): LearnCardHistory {
+function history(overrides: Partial<GroupCardState> = {}): GroupCardState {
     return {
         againCount: 0,
         lastAgainSeq: -1,
@@ -33,7 +33,7 @@ describe("computeTaskCount", () => {
 
     it("returns 2 when f>=2 fragile cards", () => {
         const cards = [1, 2, 3].map(() => makeCard([null, null]).card);
-        const h = new Map<typeof cards[0], LearnCardHistory>();
+        const h = new Map<typeof cards[0], GroupCardState>();
         h.set(cards[0]!, history({ wasNew: true }));
         h.set(cards[1]!, history({ wasNew: true }));
         h.set(cards[2]!, history());
@@ -42,7 +42,7 @@ describe("computeTaskCount", () => {
 
     it("returns 3 when f>=4 fragile cards", () => {
         const cards = Array.from({ length: 8 }, () => makeCard([null, null]).card);
-        const h = new Map<typeof cards[0], LearnCardHistory>();
+        const h = new Map<typeof cards[0], GroupCardState>();
         for (let i = 0; i < 4; i++) h.set(cards[i]!, history({ wasNew: true }));
         for (let i = 4; i < 8; i++) h.set(cards[i]!, history());
         expect(computeTaskCount(cards, h)).toBe(3);
@@ -51,7 +51,7 @@ describe("computeTaskCount", () => {
     it("caps T at ceil(G/2)", () => {
         // G=3, f=3 → raw T=3, cap = ceil(3/2)=2
         const cards = Array.from({ length: 3 }, () => makeCard([null, null]).card);
-        const h = new Map<typeof cards[0], LearnCardHistory>(
+        const h = new Map<typeof cards[0], GroupCardState>(
             cards.map(c => [c, history({ wasNew: true })]),
         );
         expect(computeTaskCount(cards, h)).toBe(2);
@@ -128,7 +128,7 @@ describe("pickSentenceWords", () => {
         // Uniform decay counts: with equal appearances, weight ratios are 4:3:1.
         // Expect A to dominate.
         const eligible = [cardA, cardB, cardC];
-        const histories = new Map<typeof cardA["card"], LearnCardHistory>();
+        const histories = new Map<typeof cardA["card"], GroupCardState>();
         histories.set(cardA.card, history({ againCount: 1 }));
         histories.set(cardB.card, history({ wasNew: true }));
         histories.set(cardC.card, history());
@@ -152,7 +152,7 @@ describe("pickSentenceWords", () => {
 
     it("falls back to a group word when no anchors exist and wordCount>=2", () => {
         const eligible = [cardA, cardB];
-        const histories = new Map<typeof cardA["card"], LearnCardHistory>();
+        const histories = new Map<typeof cardA["card"], GroupCardState>();
         histories.set(cardA.card, history());
         histories.set(cardB.card, history());
         const picks = pickSentenceWords({
@@ -174,7 +174,7 @@ describe("pickSentenceWords", () => {
         const anchors: AnchorLocation[] = [
             { ...makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)]), interval: 60 },
         ];
-        const histories = new Map<typeof cardA["card"], LearnCardHistory>();
+        const histories = new Map<typeof cardA["card"], GroupCardState>();
         histories.set(cardA.card, history());
         const picks = pickSentenceWords({
             eligible,
@@ -210,7 +210,7 @@ describe("pickSentenceWords", () => {
     it("decay reduces the effective weight of already-appeared cards", () => {
         // Two candidates with same base weight (both worst=Hard → 2). A has
         // appeared 3 times, B zero times. B should almost always be picked.
-        const histories = new Map<typeof cardA["card"], LearnCardHistory>();
+        const histories = new Map<typeof cardA["card"], GroupCardState>();
         histories.set(cardA.card, history({ worst: ReviewResponse.Hard }));
         histories.set(cardB.card, history({ worst: ReviewResponse.Hard }));
         const appearanceCounts = new Map([[cardA.card, 3]]);

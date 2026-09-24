@@ -9,7 +9,9 @@ export interface LearnItem extends CardLocation {
     writeEligible: boolean;
 }
 
-export interface LearnCardHistory {
+// Per-card bookkeeping for one group. Never persisted. Discarded when the
+// group ends, apart from the three fields the carryover snapshot copies forward.
+export interface GroupCardState {
     againCount: number;
     lastAgainSeq: number;
     worst: ReviewResponse | null;
@@ -61,8 +63,8 @@ export function buildInitialQueue(
     return queue;
 }
 
-export function makeInitialHistories(group: CardLocation[]): Map<ParsedCard, LearnCardHistory> {
-    const out = new Map<ParsedCard, LearnCardHistory>();
+export function makeInitialHistories(group: CardLocation[]): Map<ParsedCard, GroupCardState> {
+    const out = new Map<ParsedCard, GroupCardState>();
     for (const loc of group) {
         const wasNew = loc.card.schedules[0] === null || loc.card.schedules[1] === null;
         out.set(loc.card, {
@@ -80,14 +82,14 @@ export function makeInitialHistories(group: CardLocation[]): Map<ParsedCard, Lea
 // Mutate history and queue in response to an Again on `item`. The item is
 // reinserted at least LEARN_AGAIN_MIN_LAG positions past `currentIdx`.
 export function recordAgain(
-    histories: Map<ParsedCard, LearnCardHistory>,
+    histories: Map<ParsedCard, GroupCardState>,
     queue: LearnItem[],
     currentIdx: number,
     item: LearnItem,
     seq: number,
     rng: () => number = Math.random,
 ): void {
-    const h = ensure(histories, item.card);
+    const h = stateFor(histories, item.card);
     h.againCount++;
     h.lastAgainSeq = seq;
     h.pendingFaces.add(item.faceIndex);
@@ -98,25 +100,25 @@ export function recordAgain(
 // Clear a face. First-pass Okay/Good updates `worst`; post-Again OK clears
 // pending without altering `worst` beyond what Again already recorded.
 export function recordClear(
-    histories: Map<ParsedCard, LearnCardHistory>,
+    histories: Map<ParsedCard, GroupCardState>,
     item: LearnItem,
     response: ReviewResponse,
     isPostAgain: boolean,
 ): void {
-    const h = ensure(histories, item.card);
+    const h = stateFor(histories, item.card);
     h.facesCleared[item.faceIndex] = true;
     h.pendingFaces.delete(item.faceIndex);
     if (!isPostAgain) h.worst = worstOf(h.worst, response);
 }
 
-export function isGroupComplete(histories: Map<ParsedCard, LearnCardHistory>): boolean {
+export function isGroupComplete(histories: Map<ParsedCard, GroupCardState>): boolean {
     for (const h of histories.values()) {
         if (!h.facesCleared[0] || !h.facesCleared[1]) return false;
     }
     return true;
 }
 
-export function groupProgress(histories: Map<ParsedCard, LearnCardHistory>): number {
+export function groupProgress(histories: Map<ParsedCard, GroupCardState>): number {
     let total = 0;
     let cleared = 0;
     for (const h of histories.values()) {
@@ -129,22 +131,17 @@ export function groupProgress(histories: Map<ParsedCard, LearnCardHistory>): num
 
 // Eligible for sentence sampling: at least one face cleared and no face still
 // pending after an Again.
-export function isEligibleForSentences(h: LearnCardHistory): boolean {
+export function isEligibleForSentences(h: GroupCardState): boolean {
     return (h.facesCleared[0] || h.facesCleared[1]) && h.pendingFaces.size === 0;
 }
 
-function ensure(map: Map<ParsedCard, LearnCardHistory>, card: ParsedCard): LearnCardHistory {
-    let h = map.get(card);
+// Group state is seeded for every group card when the group is built. A miss
+// means the queue and the state map have diverged, which is a bug worth
+// surfacing rather than papering over with a blank record.
+function stateFor(map: Map<ParsedCard, GroupCardState>, card: ParsedCard): GroupCardState {
+    const h = map.get(card);
     if (h === undefined) {
-        h = {
-            againCount: 0,
-            lastAgainSeq: -1,
-            worst: null,
-            wasNew: false,
-            pendingFaces: new Set(),
-            facesCleared: [false, false],
-        };
-        map.set(card, h);
+        throw new Error(`Learn: no group state for card "${card.fields.word}"`);
     }
     return h;
 }
