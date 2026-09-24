@@ -371,8 +371,7 @@
 }
 
 @media (max-width: 600px) {
-    .ef-cs-header,
-    .ef-cs-footer { padding: 10px 14px; }
+    .ef-cs-header { padding: 10px 14px; }
     .ef-cs-word-list { padding: 10px 14px; gap: 8px; }
     .ef-cs-prompt-row { padding: 12px 14px; gap: 8px; }
     .ef-cs-reveal-area { padding: 10px 14px 12px; }
@@ -554,8 +553,11 @@
     font-style: italic;
 }
 
-.ef-review-actions {
+/* Shared action row for Review, Learn and Conjure Sentences. */
+.ef-review-actions,
+.ef-cs-footer {
     display: flex;
+    align-items: center;
     gap: 10px;
     justify-content: center;
     padding: 16px 24px;
@@ -664,21 +666,6 @@
     font-size: 1.05em;
     font-weight: 500;
     color: var(--text-normal);
-}
-
-.ef-cs-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 24px;
-    border-top: 1px solid var(--background-modifier-border);
-    flex-shrink: 0;
-}
-
-.ef-btn-regen {
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 /* ── Done / empty screens ────────────────────────────────── */

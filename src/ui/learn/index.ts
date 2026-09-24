@@ -21,6 +21,7 @@ import type { WriteIntent } from "src/learn/session";
 import type { SentenceWordSelection } from "src/learn/sentence-planner";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
 import { renderWordRow } from "src/ui/shared/word-row";
+import { renderResponseButton } from "src/ui/shared/response-button";
 
 export interface LearnModalOptions {
     groupLimit: number;
@@ -271,19 +272,9 @@ export class LearnModal extends Modal {
         interval: string | null,
         onClick: () => void,
     ): void {
-        const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        staggerIn(btn, keyNum - 1);
-        if (Platform.isDesktop && this.plugin.data.settings.showKeybindingsOnDesktop) {
-            btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
-        }
-        const iconEl = btn.createSpan({ cls: "ef-btn-icon" });
-        setIcon(iconEl, icon);
-        const textEl = btn.createSpan({ cls: "ef-btn-text" });
-        textEl.createSpan({ text: label, cls: "ef-btn-label" });
-        if (interval !== null) {
-            textEl.createSpan({ text: interval, cls: "ef-btn-interval" });
-        }
-        btn.addEventListener("click", onClick);
+        renderResponseButton(container, this.plugin.data.settings, {
+            keyNum, label, cls, icon, interval, onClick,
+        });
         this.addKey(String(keyNum), onClick);
     }
 

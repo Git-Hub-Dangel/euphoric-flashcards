@@ -1,4 +1,4 @@
-import { App, Modal, Platform, setIcon } from "obsidian";
+import { App, Modal, setIcon } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { buildDeckTree, flattenDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
@@ -12,6 +12,7 @@ import { fisherYates } from "src/utils/shuffle";
 import { resolveFaceIndex } from "src/utils/face";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
 import { renderWordRow } from "src/ui/shared/word-row";
+import { renderResponseButton } from "src/ui/shared/response-button";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -118,30 +119,20 @@ export class ConjureSentencesModal extends Modal {
         this.wordListEl = this.contentEl.createDiv({ cls: "ef-cs-word-list" });
 
         const footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" }, footer => {
-            this.addFooterButton(footer, 1, "Regenerate", "refresh-cw", "ef-btn-regen", () => this.drawWords());
-            this.addFooterButton(footer, 2, "Good", "check", "ef-btn-good", () => this.drawWords());
+            const settings = this.plugin.data.settings;
+            renderResponseButton(footer, settings, {
+                keyNum: 1, label: "Regenerate", cls: "ef-btn-regen", icon: "refresh-cw",
+                onClick: () => this.drawWords(),
+            });
+            renderResponseButton(footer, settings, {
+                keyNum: 2, label: "Good", cls: "ef-btn-good", icon: "check",
+                onClick: () => this.drawWords(),
+            });
         });
         staggerIn(footerEl, 1);
 
         this.scope.register([], "1", () => { this.drawWords(); return false; });
         this.scope.register([], "2", () => { this.drawWords(); return false; });
-    }
-
-    private addFooterButton(
-        container: HTMLElement,
-        keyNum: number,
-        label: string,
-        icon: string,
-        cls: string,
-        onClick: () => void,
-    ): void {
-        const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        if (Platform.isDesktop && this.plugin.data.settings.showKeybindingsOnDesktop) {
-            btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
-        }
-        setIcon(btn.createSpan({ cls: "ef-btn-icon" }), icon);
-        btn.createSpan({ text: label, cls: "ef-btn-label" });
-        btn.addEventListener("click", onClick);
     }
 
     private drawWords(): void {
