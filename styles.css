@@ -219,24 +219,26 @@
     color: var(--interactive-accent);
 }
 
+/* ── Explorer body: shared horizontal padding for settings + deck list ── */
+.ef-explorer-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    padding: 12px 16px 0;
+    gap: 12px;
+    overflow: hidden;
+}
+
 /* ── Review Settings section ──────────────────────────────── */
 .ef-review-settings {
-    padding: 12px 24px 4px;
     flex-shrink: 0;
-}
-.ef-settings-heading {
-    font-size: 0.75em;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
-    margin-bottom: 8px;
 }
 .ef-settings-row {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 5px 0;
+    padding: 5px 8px;
 }
 .ef-settings-label {
     min-width: 110px;
@@ -253,16 +255,6 @@
     color: var(--text-normal);
 }
 .ef-settings-input { width: 60px; }
-.ef-settings-panel { padding-bottom: 10px; }
-
-/* ── Section title (e.g. "Decks") ────────────────────────── */
-.ef-section-title {
-    padding: 22px 24px 10px;
-    font-size: 1.5em;
-    font-weight: 700;
-    color: var(--text-normal);
-    flex-shrink: 0;
-}
 
 /* ── Deck list ────────────────────────────────────────────── */
 .ef-deck-list-wrap {
@@ -279,8 +271,7 @@
     grid-template-columns: minmax(0, 1fr) 56px 56px 56px 56px;
     align-items: center;
     gap: 8px;
-    padding: 8px 20px;
-    border-bottom: 1px solid var(--background-modifier-border);
+    padding: 8px 8px;
     background: transparent;
     font-size: 0.72em;
     font-weight: 700;
@@ -301,7 +292,7 @@
     grid-template-columns: minmax(0, 1fr) 56px 56px 56px 56px;
     align-items: center;
     gap: 8px;
-    padding: 8px 20px;
+    padding: 8px 8px;
     border-radius: 6px;
     cursor: pointer;
     transition: background 0.1s;
@@ -342,8 +333,8 @@
 
 .ef-stat-total { color: var(--text-normal); }
 .ef-stat-seen  { color: var(--text-muted); }
-.ef-stat-due   { color: #e53935; }
-.ef-stat-new   { color: #1e88e5; }
+.ef-stat-due   { color: var(--interactive-accent); }
+.ef-stat-new   { color: color-mix(in srgb, var(--interactive-accent) 50%, var(--text-muted)); }
 
 .ef-empty-state {
     padding: 40px;
@@ -354,16 +345,15 @@
 /* ── Narrow viewport (mobile, split panes) ────────────────── */
 @media (max-width: 600px) {
     .ef-explorer-header { padding: 10px 14px; }
-    .ef-review-settings { padding: 10px 14px 2px; }
+    .ef-explorer-body { padding: 8px 6px 0; gap: 8px; }
     .ef-settings-row { gap: 8px; }
     .ef-settings-label { min-width: 88px; }
-    .ef-section-title { padding: 14px 14px 6px; font-size: 1.25em; }
 
     .ef-deck-header,
     .ef-deck-row {
         grid-template-columns: minmax(0, 1fr) 40px 40px 40px 40px;
         gap: 4px;
-        padding: 8px 12px;
+        padding: 8px 8px;
     }
     .ef-deck-stat-col { font-size: 0.82em; }
     .ef-deck-header { font-size: 0.65em; letter-spacing: 0.05em; }
@@ -373,7 +363,7 @@
     .ef-deck-header,
     .ef-deck-row {
         grid-template-columns: minmax(0, 1fr) 34px 34px 34px;
-        padding: 8px 10px;
+        padding: 8px 8px;
     }
     /* Hide "Seen" — derivable from Total − New. */
     .ef-deck-header .ef-stat-seen,
@@ -381,9 +371,9 @@
 }
 
 @media (max-width: 600px) {
-    .ef-cs-header,
-    .ef-cs-footer { padding: 10px 14px; }
+    .ef-cs-header { padding: 10px 14px; }
     .ef-cs-word-list { padding: 10px 14px; gap: 8px; }
+    .ef-deposit-bar { padding: 2px 14px 10px; }
     .ef-cs-prompt-row { padding: 12px 14px; gap: 8px; }
     .ef-cs-reveal-area { padding: 10px 14px 12px; }
     .ef-cs-word-text { font-size: 1.1em; }
@@ -405,7 +395,24 @@
     flex-shrink: 0;
 }
 .ef-review-deck-name { font-weight: 600; }
-.ef-review-progress  { color: var(--text-muted); font-size: 0.9em; }
+.ef-review-progress  {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    padding: 3px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 999px;
+    background: transparent;
+    line-height: 1.3;
+}
+.ef-learn-group-progress {
+    color: var(--text-normal);
+    font-size: 0.9em;
+    padding: 3px 12px;
+    border: 1px solid var(--interactive-accent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+    line-height: 1.3;
+}
 .ef-review-header-right {
     display: flex;
     align-items: center;
@@ -547,8 +554,11 @@
     font-style: italic;
 }
 
-.ef-review-actions {
+/* Shared action row for Review, Learn and Conjure Sentences. */
+.ef-review-actions,
+.ef-cs-footer {
     display: flex;
+    align-items: center;
     gap: 10px;
     justify-content: center;
     padding: 16px 24px;
@@ -584,6 +594,8 @@
     color: var(--interactive-accent);
 }
 
+/* Shared sentence surface for Conjure Sentences and Learn. Full width on
+   phones, capped at a comfortable reading width and centred above that. */
 .ef-cs-word-list {
     flex: 1;
     overflow-y: auto;
@@ -591,6 +603,58 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+}
+
+/* Learn hosts the sentence list inside the card body. Neutralise the body's
+   centring and padding so the list governs its own layout. */
+.ef-card-body.ef-sentence-body {
+    padding: 0;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0;
+    overflow: hidden;
+}
+
+/* Sentence deposit. A slim bar pinned between the word list and the action
+   row, matching the list's reading width so the input lines up with the word
+   rows. Borderless so it does not stack a second rule on the footer's. */
+.ef-deposit-bar {
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 760px;
+    margin-inline: auto;
+    padding: 2px 24px 18px;
+}
+.ef-deposit-input {
+    width: 100%;
+    padding: 7px 12px;
+    font-size: 0.95em;
+    line-height: 1.3;
+    color: var(--text-normal);
+    background: transparent;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+}
+.ef-deposit-input:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: none;
+}
+
+/* While the input has focus on mobile the bar floats above the on screen
+   keyboard. A transform leaves the layout untouched, so the word list does
+   not reflow and nothing can open a gap under the action row. The distance
+   is computed in attachKeyboardLift from the measured keyboard height. */
+.ef-deposit-bar {
+    transition: transform var(--ef-anim-dur) ease;
+}
+.ef-deposit-bar.is-lifted {
+    transform: translateY(calc(-1 * var(--ef-deposit-lift, 0px)));
+}
+.ef-deposit-bar.is-lifted .ef-deposit-input {
+    background: var(--background-modifier-form-field);
 }
 
 /* Construction constraint pill — shown above the word list when enabled and
@@ -657,21 +721,6 @@
     font-size: 1.05em;
     font-weight: 500;
     color: var(--text-normal);
-}
-
-.ef-cs-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 24px;
-    border-top: 1px solid var(--background-modifier-border);
-    flex-shrink: 0;
-}
-
-.ef-btn-regen {
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 /* ── Done / empty screens ────────────────────────────────── */
@@ -865,6 +914,7 @@
 @media (prefers-reduced-motion: reduce) {
     .ef-anim-in,
     .ef-cc-pill.ef-fading,
+    .ef-deposit-bar,
     .ef-progress-flash,
     .ef-deck-chevron,
     .modal.ef-modal-leaving .modal-content {

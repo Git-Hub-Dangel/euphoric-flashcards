@@ -1,14 +1,18 @@
-import { App, Modal, Platform, setIcon } from "obsidian";
+import { App, Modal, setIcon } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { buildDeckTree, flattenDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { loadCardsForDeck } from "src/ui/review/load-cards";
 import type { ReviewCard } from "src/ui/review/load-cards";
-import { frontFace, backFace, cardReveal } from "src/parsing";
-import type { ParsedCard } from "src/parsing";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboard } from "src/ui/modal-utils";
+import { fisherYates } from "src/utils/shuffle";
+import { resolveFaceIndex } from "src/utils/face";
+import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
+import { renderResponseButton } from "src/ui/shared/response-button";
+import { commitDeposit, createSentenceSurface, readDeposit, redrawSentence } from "src/ui/shared/sentence-renderer";
+import type { SentenceSurface, SentenceWord } from "src/ui/shared/sentence-renderer";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -17,26 +21,16 @@ export interface ConjureSentencesOptions {
     selectionDeckTag: string;
 }
 
-interface WordItem {
-    card: ParsedCard;
-    faceIndex: 0 | 1;
-}
-
-function fisherYates<T>(arr: T[]): T[] {
-    for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j]!, arr[i]!];
-    }
-    return arr;
-}
-
 export class ConjureSentencesModal extends Modal {
     private readonly plugin: EuphoricFlashcardsPlugin;
     private readonly options: ConjureSentencesOptions;
 
     private allCards: ReviewCard[] = [];
-    private wordListEl: HTMLElement | null = null;
+    private surface: SentenceSurface | null = null;
+    private footerEl: HTMLElement | null = null;
     private constraintPool: string[] = [];
+    private stopKeyboardTracking: (() => void) | null = null;
+    private depositing = false;
 
     constructor(
         app: App,
@@ -54,6 +48,7 @@ export class ConjureSentencesModal extends Modal {
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
         applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
+        this.stopKeyboardTracking = trackKeyboard();
         this.contentEl.addClass("ef-conjure-sentences");
         this.addBackButton();
         this.load().catch(err => {
@@ -64,6 +59,8 @@ export class ConjureSentencesModal extends Modal {
     }
 
     onClose(): void {
+        this.stopKeyboardTracking?.();
+        this.stopKeyboardTracking = null;
         this.contentEl.empty();
     }
 
@@ -105,26 +102,10 @@ export class ConjureSentencesModal extends Modal {
         }
 
         this.allCards = await loadCardsForDeck(this.app.vault, selectionNode, rootTags);
-        this.constraintPool = this.buildConstraintPool();
+        this.constraintPool = buildConstructionConstraintPool(this.plugin.data.settings, this.options.selectionDeckTag);
         this.contentEl.empty();
         this.buildLayout();
         this.drawWords();
-    }
-
-    private buildConstraintPool(): string[] {
-        const settings = this.plugin.data.settings;
-        if (!settings.enableConstructionConstraints) return [];
-        const target = this.options.selectionDeckTag.replace(/^#/, "").toLowerCase();
-        const pool: string[] = [];
-        for (const cc of settings.constructionConstraints) {
-            const match = cc.deckTags.some(t => {
-                const bound = t.replace(/^#/, "").toLowerCase();
-                if (bound.length === 0) return false;
-                return target === bound || target.startsWith(bound + "/");
-            });
-            if (match) pool.push(...cc.labels);
-        }
-        return pool;
     }
 
     private buildLayout(): void {
@@ -136,82 +117,76 @@ export class ConjureSentencesModal extends Modal {
         });
         staggerIn(headerEl, 0);
 
-        this.wordListEl = this.contentEl.createDiv({ cls: "ef-cs-word-list" });
+        this.surface = createSentenceSurface(this.contentEl, this.plugin.data.settings);
 
-        const footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" }, footer => {
-            this.addFooterButton(footer, 1, "Regenerate", "refresh-cw", "ef-btn-regen", () => this.drawWords());
-            this.addFooterButton(footer, 2, "Good", "check", "ef-btn-good", () => this.drawWords());
+        this.footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" });
+        staggerIn(this.footerEl, 2);
+
+        this.scope.register([], "1", (evt) => {
+            if (isTextEntryEvent(evt)) return true;
+            this.drawWords();
+            return false;
         });
-        staggerIn(footerEl, 1);
-
-        this.scope.register([], "1", () => { this.drawWords(); return false; });
-        this.scope.register([], "2", () => { this.drawWords(); return false; });
+        this.scope.register([], "2", (evt) => {
+            if (isTextEntryEvent(evt)) return true;
+            void this.handleGood();
+            return false;
+        });
     }
 
-    private addFooterButton(
-        container: HTMLElement,
-        keyNum: number,
-        label: string,
-        icon: string,
-        cls: string,
-        onClick: () => void,
-    ): void {
-        const btn = container.createEl("button", { cls: `ef-btn ef-btn-response ${cls}` });
-        if (Platform.isDesktop && this.plugin.data.settings.showKeybindingsOnDesktop) {
-            btn.createSpan({ text: String(keyNum), cls: "ef-btn-key" });
+    // Deposits the typed sentence before the redraw wipes it. A failed
+    // deposit holds the surface so the draft survives for a retry.
+    private async handleGood(): Promise<void> {
+        if (!this.surface || this.depositing) return;
+        this.depositing = true;
+        try {
+            const ok = await commitDeposit({
+                vault: this.app.vault,
+                settings: this.plugin.data.settings,
+                raw: readDeposit(this.surface),
+            });
+            if (!ok) return;
+        } finally {
+            this.depositing = false;
         }
-        setIcon(btn.createSpan({ cls: "ef-btn-icon" }), icon);
-        btn.createSpan({ text: label, cls: "ef-btn-label" });
-        btn.addEventListener("click", onClick);
+        this.drawWords();
     }
 
     private drawWords(): void {
-        if (!this.wordListEl) return;
-        const wordListEl = this.wordListEl;
-        const existingPill = wordListEl.querySelector<HTMLElement>(".ef-cc-pill");
-        const doDraw = (): void => this.renderDraw(wordListEl);
-        if (existingPill && this.plugin.data.settings.animationDurationMs > 0) {
-            existingPill.addClass("ef-fading");
-            window.setTimeout(doDraw, 100);
-        } else {
-            doDraw();
-        }
+        if (!this.surface) return;
+        redrawSentence(this.surface, {
+            settings: this.plugin.data.settings,
+            constraintPool: this.constraintPool,
+            words: () => this.selectWords(),
+            emptyText: "No cards in selection deck.",
+            renderChrome: () => this.renderActions(),
+        });
     }
 
-    private renderDraw(wordListEl: HTMLElement): void {
-        const words = this.selectWords();
-        wordListEl.empty();
-
-        if (words.length === 0) {
-            wordListEl.createEl("p", { text: "No cards in selection deck.", cls: "ef-loading" });
-            return;
-        }
-
-        let idx = 0;
-        const label = this.constraintPool[Math.floor(Math.random() * this.constraintPool.length)];
-        if (label !== undefined) {
-            const pillWrap = wordListEl.createDiv({ cls: "ef-cc-pill-wrap" }, wrap => {
-                wrap.createSpan({ text: label, cls: "ef-cc-pill" });
-            });
-            staggerIn(pillWrap, idx++);
-        }
-
-        for (const item of words) {
-            const row = this.renderWordItem(wordListEl, item);
-            staggerIn(row, idx++);
-        }
+    // Rebuilt on every draw so the buttons replay their entrance, giving the
+    // same tap feedback Learn has. Key bindings live on the scope, so
+    // discarding the elements does not drop them.
+    private renderActions(): void {
+        if (!this.footerEl) return;
+        this.footerEl.empty();
+        const settings = this.plugin.data.settings;
+        renderResponseButton(this.footerEl, settings, {
+            keyNum: 1, label: "Regenerate", cls: "ef-btn-regen", icon: "refresh-cw",
+            onClick: () => this.drawWords(),
+        });
+        renderResponseButton(this.footerEl, settings, {
+            keyNum: 2, label: "Good", cls: "ef-btn-good", icon: "check",
+            onClick: () => { void this.handleGood(); },
+        });
     }
 
-    private selectWords(): WordItem[] {
+    private selectWords(): SentenceWord[] {
         const { wordCount, wordSelection, cardSide } = this.options;
 
         // orientation once per sentence for all cards
-        const faceIndex: 0 | 1 =
-            cardSide === "Front" ? 0
-            : cardSide === "Back" ? 1
-            : (Math.random() < 0.5 ? 0 : 1);
+        const faceIndex = resolveFaceIndex(cardSide);
 
-        const toWordItem = (rc: ReviewCard): WordItem => ({ card: rc.card, faceIndex });
+        const toSentenceWord = (rc: ReviewCard): SentenceWord => ({ card: rc.card, faceIndex });
 
         if (wordSelection === "Optimised") {
             const mature = this.allCards.filter(
@@ -236,61 +211,13 @@ export class ConjureSentencesModal extends Modal {
                 picked.push(...leftover.slice(0, wordCount - picked.length));
             }
 
-            return fisherYates(picked).map(toWordItem);
+            return fisherYates(picked).map(toSentenceWord);
         }
 
         // Random
         return fisherYates([...this.allCards])
             .slice(0, Math.min(wordCount, this.allCards.length))
-            .map(toWordItem);
+            .map(toSentenceWord);
     }
 
-    private renderWordItem(container: HTMLElement, item: WordItem): HTMLElement {
-        const settings = this.plugin.data.settings;
-        const face = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
-        const reveal = cardReveal(item.card);
-
-        const row = container.createDiv({ cls: "ef-cs-word-row" });
-
-        const promptRow = row.createDiv({ cls: "ef-cs-prompt-row" });
-        promptRow.createSpan({ text: face.prompt, cls: "ef-cs-word-text" });
-
-        const revealBtn = promptRow.createEl("button", { cls: "ef-btn ef-cs-reveal-btn" });
-        const revealBtnIcon = revealBtn.createSpan({ cls: "ef-btn-icon" });
-        setIcon(revealBtnIcon, "eye");
-        revealBtn.createSpan({ text: "Reveal" });
-
-        const revealArea = row.createDiv({ cls: "ef-cs-reveal-area ef-hidden" });
-
-        revealArea.createDiv({ cls: "ef-card-answer-line" }, line => {
-            line.createSpan({ text: face.answer, cls: "ef-cs-word-answer" });
-            if (reveal.type) {
-                const tc = settings.cardTypes.find(t => t.key === reveal.type);
-                const badge = line.createSpan({
-                    text: tc?.label ?? reveal.type,
-                    cls: "ef-type-badge",
-                });
-                badge.setCssStyles({ backgroundColor: tc?.color ?? "var(--background-modifier-border)" });
-            }
-        });
-
-        if (reveal.explanation) {
-            revealArea.createEl("p", { text: reveal.explanation, cls: "ef-explanation" });
-        }
-        if (reveal.examples.length > 0) {
-            const list = revealArea.createDiv({ cls: "ef-examples" });
-            for (const ex of reveal.examples) {
-                list.createDiv({ text: `"${ex}"`, cls: "ef-example-item" });
-            }
-        }
-
-        revealBtn.addEventListener("click", () => {
-            const isHidden = revealArea.hasClass("ef-hidden");
-            revealArea.toggleClass("ef-hidden", !isHidden);
-            setIcon(revealBtnIcon, isHidden ? "eye-off" : "eye");
-            if (isHidden) staggerIn(revealArea, 0);
-        });
-
-        return row;
-    }
 }

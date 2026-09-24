@@ -4,6 +4,7 @@ import { buildDeckTree } from "src/decks";
 import type { DeckNode, FileLines } from "src/decks";
 import { ReviewModal } from "src/ui/review/index";
 import { ConjureSentencesModal } from "src/ui/conjure-sentences/index";
+import { LearnModal } from "src/ui/learn/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
 import type { CardSide, WordSelection, ReviewMode } from "src/settings";
 
@@ -15,6 +16,7 @@ export class ExplorerModal extends Modal {
     private cardSide: CardSide;
     private cramSide: CardSide;
     private csSide: CardSide;
+    private learnGroups: number;
     private wordCount: number;
     private wordSelection: WordSelection;
     private roots: DeckNode[] = [];
@@ -37,6 +39,7 @@ export class ExplorerModal extends Modal {
         this.csSide = saved?.conjureSentencesCardSide ?? settings.defaultConjureSentencesSide;
         this.wordSelection = saved?.conjureSentencesSelection ?? settings.conjureSentencesSelection;
         this.wordCount = settings.conjureSentencesWordCount;
+        this.learnGroups = settings.learnGroupsPerSession;
     }
 
     private persistState(): void {
@@ -71,6 +74,9 @@ export class ExplorerModal extends Modal {
         const settings = this.plugin.data.settings;
         // Word count is not exposed in the Explorer — always take current setting value.
         this.wordCount = settings.conjureSentencesWordCount;
+        // Groups-per-session is instance-only; re-read on every open so
+        // per-session overrides reset naturally when the Explorer reopens.
+        this.learnGroups = settings.learnGroupsPerSession;
 
         const rootTags = settings.rootDeckTags.map(t => t.startsWith("#") ? t : "#" + t);
         const mdFiles = this.app.vault.getMarkdownFiles();
@@ -106,17 +112,19 @@ export class ExplorerModal extends Modal {
         });
         staggerIn(headerEl, 0);
 
-        // ── Review Settings ──────────────────────────────────────────────────
-        const settingsEl = this.contentEl.createDiv({ cls: "ef-review-settings" }, section => {
-            section.createDiv({ text: "Review Settings", cls: "ef-settings-heading" });
+        // ── Body (shared horizontal padding for settings + deck list) ───────
+        const bodyEl = this.contentEl.createDiv({ cls: "ef-explorer-body" });
 
+        // ── Review Settings ──────────────────────────────────────────────────
+        const settingsEl = bodyEl.createDiv({ cls: "ef-review-settings" }, section => {
             section.createDiv({ cls: "ef-settings-row" }, row => {
                 row.createSpan({ text: "Review Mode", cls: "ef-settings-label" });
                 const sel = row.createEl("select", { cls: "ef-settings-select" });
                 const modes: [ReviewMode, string][] = [
+                    ["Learn", "Learn"],
                     ["Review", "Review"],
-                    ["Cram", "Cram"],
                     ["ConjureSentences", "Conjure Sentences"],
+                    ["Cram", "Cram"],
                 ];
                 for (const [val, label] of modes) {
                     const opt = sel.createEl("option", { text: label });
@@ -139,11 +147,8 @@ export class ExplorerModal extends Modal {
         // ── Deck list ────────────────────────────────────────────────────────
         this.roots = [...tree.values()].filter(n => n.stats.total > 0);
 
-        const sectionTitle = this.contentEl.createDiv({ text: "Decks", cls: "ef-section-title" });
-        staggerIn(sectionTitle, 2);
-
-        const wrap = this.contentEl.createDiv({ cls: "ef-deck-list-wrap" });
-        staggerIn(wrap, 3);
+        const wrap = bodyEl.createDiv({ cls: "ef-deck-list-wrap" });
+        staggerIn(wrap, 2);
 
         // Sticky header row with column labels
         wrap.createDiv({ cls: "ef-deck-header" }, h => {
@@ -179,14 +184,19 @@ export class ExplorerModal extends Modal {
         const p = this.settingsPanelEl;
 
         if (this.mode === "ConjureSentences") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.csSide,
+            this.addSelectRow(p, "Card Side", ["Shuffle", "Front", "Back"], this.csSide,
                 v => { this.csSide = v as CardSide; this.persistState(); });
         } else if (this.mode === "Review") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.cardSide,
+            this.addSelectRow(p, "Card Side", ["Shuffle", "Front", "Back"], this.cardSide,
                 v => { this.cardSide = v as CardSide; this.persistState(); });
         } else if (this.mode === "Cram") {
-            this.addSelectRow(p, "Card Side", ["Front", "Back", "Shuffle"], this.cramSide,
+            this.addSelectRow(p, "Card Side", ["Shuffle", "Front", "Back"], this.cramSide,
                 v => { this.cramSide = v as CardSide; this.persistState(); });
+        } else if (this.mode === "Learn") {
+            // Learn is always shuffled
+            const groupOptions = Array.from({ length: 10 }, (_, i) => String(i + 1));
+            this.addSelectRow(p, "Groups", groupOptions, String(this.learnGroups),
+                v => { this.learnGroups = parseInt(v, 10); });
         }
     }
 
@@ -232,8 +242,8 @@ export class ExplorerModal extends Modal {
         const nameCell = row.createDiv({ cls: "ef-deck-name-cell" });
         nameCell.setCssStyles({ paddingLeft: `${depth * 20}px` });
 
-        const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
         if (hasChildren) {
+            const chevron = nameCell.createSpan({ cls: "ef-deck-chevron" });
             setIcon(chevron, "chevron-right");
             chevron.addClass("ef-deck-chevron-active");
             if (isExpanded) chevron.addClass("is-open");
@@ -280,6 +290,13 @@ export class ExplorerModal extends Modal {
                 cardSide: this.csSide,
                 wordCount: this.wordCount,
                 wordSelection: this.wordSelection,
+                selectionDeckTag: node.tag,
+            }).open();
+            return;
+        }
+        if (this.mode === "Learn") {
+            new LearnModal(this.app, this.plugin, node, {
+                groupLimit: this.learnGroups,
                 selectionDeckTag: node.tag,
             }).open();
             return;

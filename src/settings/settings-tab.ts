@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type { SettingDefinitionItem } from "obsidian";
+import type { SettingDefinitionItem, TFile } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { ConstructionConstraintCollection, TypeConfig } from "src/settings/index";
 import { DEFAULT_SETTINGS } from "src/settings/index";
@@ -26,12 +26,15 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 .split(/[\n,]+/)
                 .map(t => t.trim())
                 .filter(t => t.length > 0);
-        } else if (key === "startOfDay") {
+        } else if (key === "startOfDay" || key === "depositInboxPath") {
             s[key] = typeof value === "string" ? value.trim() : value;
         } else {
             s[key] = value;
         }
         await this.plugin.saveData_();
+        // The deposit inbox and notification rows are disabled while the
+        // feature is off, so their disabled state has to be re-evaluated.
+        if (key === "enableSentenceDeposit") this.update();
     }
 
     getSettingDefinitions(): SettingDefinitionItem[] {
@@ -44,11 +47,11 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             // Info
             {
                 type: "group",
-                heading: "Resources for Euphoric Flashcards",
+                heading: "",
                 items: [
                     {
                         name: "",
-                        desc: "Open the official introductory follow-along guide to Euphoric Flashcards. There, you'll also find links to the repo. ",
+                        desc: "Access the official introductory follow-along guide to Euphoric Flashcards. There, you'll also find links to the repo and docs. ",
                         render: (setting: Setting): void => {
                             setting.addButton(btn => {
                                 btn.setButtonText("Open Guide")
@@ -131,25 +134,29 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 },
             },
 
-            // Review
+            // Learn
             {
                 type: "group",
-                heading: "Review",
+                heading: "Learn",
                 items: [
                     {
-                        name: "Show interval on buttons",
-                        desc: "Display a preview of the resulting interval on buttons during review. e.g. '4d', '1d', '3.5m'",
+                        name: "Groups per session",
+                        desc: "The default number of card groups appearing per Learn session. Card groups are sets of 4-8 flashcards that you first review, then train sentence forming in Conjure Sentence exercises with. The current group's amount of cards and the total amount of groups in the active session is displayed in the upper right durring Learn mode.",
                         control: {
-                            type: "toggle",
-                            key: "showIntervalOnButtons",
+                            type: "slider",
+                            key: "learnGroupsPerSession",
+                            min: 1,
+                            max: 5,
+                            step: 1,
                         },
                     },
                     {
-                        name: "Show keybindings on desktop",
-                        desc: "Show the keyboard shortcut number on each review button (1, 2, 3). Keybindings remain functional regardless of visibility. Always hidden on mobile device.",
+                        name: "Card side for conjuring sentences",
+                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native / proficient language. (e.g. If you use the syntax 'word - translation', then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word in your target language, then apply it.",
                         control: {
-                            type: "toggle",
-                            key: "showKeybindingsOnDesktop",
+                            type: "dropdown",
+                            key: "learnSentenceSide",
+                            options: { Default: "Default", Front: "Front", Back: "Back" },
                         },
                     },
                 ],
@@ -167,7 +174,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             type: "slider",
                             key: "conjureSentencesWordCount",
                             min: 1,
-                            max: 17,
+                            max: 6,
                             step: 1,
                         },
                     },
@@ -181,6 +188,34 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         },
                     },
                     {
+                        name: "Enable sentence deposit",
+                        desc: "When on, sentence exercises show an input below the word list. Pressing 'Good' appends what you typed to the deposit inbox note as a new line. Works in Conjure Sentences and in the sentence steps of Learn mode.",
+                        control: {
+                            type: "toggle",
+                            key: "enableSentenceDeposit",
+                        },
+                    },
+                    {
+                        name: "Deposit inbox",
+                        desc: "The note your sentences are appended to. Sentences are added at the end of the file, one per line.",
+                        control: {
+                            type: "file",
+                            key: "depositInboxPath",
+                            placeholder: "Inbox/Sentences.md",
+                            filter: (file: TFile): boolean => file.extension === "md",
+                            disabled: (): boolean => !this.plugin.data.settings.enableSentenceDeposit,
+                        },
+                    },
+                    {
+                        name: "Show deposit notification",
+                        desc: "Show a confirmation banner after a sentence is appended. Failures are always reported regardless of this setting.",
+                        control: {
+                            type: "toggle",
+                            key: "showDepositNotification",
+                            disabled: (): boolean => !this.plugin.data.settings.enableSentenceDeposit,
+                        },
+                    },
+                    {
                         name: "Enable construction constraints",
                         desc: "When on, each Conjure Sentences session shows a random construction constraint at the top, drawn from collections bound to the current source deck.",
                         control: {
@@ -191,7 +226,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 ],
             },
 
-            // Construction Constraints
+            // Construction Constraints (sits directly under the Conjure
+            // Sentences group so it visually attaches to the toggle above).
             {
                 type: "list",
                 heading: "Construction Constraints",
@@ -335,6 +371,22 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 type: "group",
                 heading: "Appearance",
                 items: [
+                    {
+                        name: "Show interval on buttons",
+                        desc: "Display a preview of the resulting interval on buttons during review. (e.g. 4d, 15d, 3.5m)",
+                        control: {
+                            type: "toggle",
+                            key: "showIntervalOnButtons",
+                        },
+                    },
+                    {
+                        name: "Show keybindings on desktop",
+                        desc: "Show the keyboard shortcut number on each review button (1, 2, 3). Keybindings remain functional regardless of visibility. Always hidden on mobile device.",
+                        control: {
+                            type: "toggle",
+                            key: "showKeybindingsOnDesktop",
+                        },
+                    },
                     {
                         name: "Animation duration",
                         desc: "Duration in milliseconds for subtle animations throughout Euphoric Flashcards' features. Set to 0 to disable all animations. Respects reduced motion.",

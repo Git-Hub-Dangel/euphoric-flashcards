@@ -74,3 +74,95 @@ export function fadeOutThen(modal: Modal, next: () => void): void {
     modal.modalEl.addClass("ef-modal-leaving");
     window.setTimeout(next, 120);
 }
+
+// True when a key event came from a text entry field. Modal key handlers use
+// it so typing a digit into an input does not also fire a response button.
+export function isTextEntryEvent(evt: KeyboardEvent): boolean {
+    const target = evt.target;
+    if (!(target instanceof HTMLElement)) return false;
+    return target.closest('input, textarea, [contenteditable="true"]') !== null;
+}
+
+// On screen keyboard height, in CSS pixels, or 0 when it is closed.
+// A mobile WebView can report this on three different channels depending on
+// how it handles the keyboard, and a channel that does not apply stays silent
+// at 0. Reading all of them and keeping the largest plausible value is what
+// makes the result independent of that configuration.
+let keyboardHeight = 0;
+let capacitorHeight = 0;
+const keyboardSubscribers = new Set<(height: number) => void>();
+
+const MIN_PLAUSIBLE_KEYBOARD_PX = 120;
+const MAX_PLAUSIBLE_KEYBOARD_RATIO = 0.8;
+
+export function getKeyboardHeight(): number {
+    return keyboardHeight;
+}
+
+// Subscribe to height changes. Returns an unsubscribe function.
+export function onKeyboardChange(cb: (height: number) => void): () => void {
+    keyboardSubscribers.add(cb);
+    return () => { keyboardSubscribers.delete(cb); };
+}
+
+function recomputeKeyboardHeight(): void {
+    const inner = window.innerHeight;
+    const candidates = [capacitorHeight, inner - document.body.clientHeight];
+    const vv = window.visualViewport;
+    if (vv) candidates.push(inner - (vv.height + vv.offsetTop));
+
+    let best = 0;
+    for (const c of candidates) {
+        if (c < MIN_PLAUSIBLE_KEYBOARD_PX) continue;
+        if (c > inner * MAX_PLAUSIBLE_KEYBOARD_RATIO) continue;
+        if (c > best) best = c;
+    }
+    if (Math.abs(best - keyboardHeight) < 1) return;
+    keyboardHeight = best;
+    for (const cb of keyboardSubscribers) cb(best);
+}
+
+// Reads the keyboard height off every channel the host WebView might use.
+// Returns a disposer the modal calls in onClose.
+export function trackKeyboard(): () => void {
+    const onCapacitorShow = (e: Event): void => {
+        const detail = e as Event & { keyboardHeight?: number; detail?: { keyboardHeight?: number } };
+        capacitorHeight = detail.keyboardHeight ?? detail.detail?.keyboardHeight ?? 0;
+        recomputeKeyboardHeight();
+    };
+    const onCapacitorHide = (): void => {
+        capacitorHeight = 0;
+        recomputeKeyboardHeight();
+    };
+    const onViewport = (): void => { recomputeKeyboardHeight(); };
+
+    window.addEventListener("keyboardWillShow", onCapacitorShow);
+    window.addEventListener("keyboardDidShow", onCapacitorShow);
+    window.addEventListener("keyboardWillHide", onCapacitorHide);
+    window.addEventListener("keyboardDidHide", onCapacitorHide);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", onViewport);
+    vv?.addEventListener("scroll", onViewport);
+    window.addEventListener("resize", onViewport);
+
+    return () => {
+        window.removeEventListener("keyboardWillShow", onCapacitorShow);
+        window.removeEventListener("keyboardDidShow", onCapacitorShow);
+        window.removeEventListener("keyboardWillHide", onCapacitorHide);
+        window.removeEventListener("keyboardDidHide", onCapacitorHide);
+        vv?.removeEventListener("resize", onViewport);
+        vv?.removeEventListener("scroll", onViewport);
+        window.removeEventListener("resize", onViewport);
+        capacitorHeight = 0;
+        keyboardHeight = 0;
+        keyboardSubscribers.clear();
+    };
+}
+
+// Some hosts report the keyboard only after it has finished animating and
+// emit no event at all. A few delayed samples after a focus cover that case.
+export function sampleKeyboardSoon(): void {
+    window.setTimeout(recomputeKeyboardHeight, 150);
+    window.setTimeout(recomputeKeyboardHeight, 400);
+    window.setTimeout(recomputeKeyboardHeight, 800);
+}
