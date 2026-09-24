@@ -574,16 +574,6 @@
     overflow: hidden;
 }
 
-/* The on screen keyboard covers the bottom of the viewport without shrinking
-   it on iOS. `--ef-kb-inset` is kept current by trackKeyboardInset, so the
-   column shrinks and the scrollable word list absorbs the loss. This keeps
-   the deposit input and the action row reachable while typing. */
-.ef-conjure-sentences,
-.ef-review {
-    box-sizing: border-box;
-    padding-bottom: var(--ef-kb-inset, 0px);
-}
-
 .ef-cs-header {
     display: flex;
     align-items: center;
@@ -651,6 +641,20 @@
 .ef-deposit-input:focus {
     border-color: var(--interactive-accent);
     box-shadow: none;
+}
+
+/* While the input has focus on mobile the bar floats above the on screen
+   keyboard. A transform leaves the layout untouched, so the word list does
+   not reflow and nothing can open a gap under the action row. The distance
+   is computed in attachKeyboardLift from the measured keyboard height. */
+.ef-deposit-bar {
+    transition: transform var(--ef-anim-dur) ease;
+}
+.ef-deposit-bar.is-lifted {
+    transform: translateY(calc(-1 * var(--ef-deposit-lift, 0px)));
+}
+.ef-deposit-bar.is-lifted .ef-deposit-input {
+    background: var(--background-modifier-form-field);
 }
 
 /* Construction constraint pill — shown above the word list when enabled and
@@ -750,7 +754,7 @@
     }
     .modal.ef-modal-fullscreen .ef-review-actions,
     .modal.ef-modal-fullscreen .ef-cs-footer {
-        padding-bottom: calc(18px + max(0px, env(safe-area-inset-bottom) - var(--ef-kb-inset, 0px)));
+        padding-bottom: calc(18px + env(safe-area-inset-bottom));
     }
     .modal.ef-modal-fullscreen .ef-done {
         padding-top: calc(40px + env(safe-area-inset-top));
@@ -910,6 +914,7 @@
 @media (prefers-reduced-motion: reduce) {
     .ef-anim-in,
     .ef-cc-pill.ef-fading,
+    .ef-deposit-bar,
     .ef-progress-flash,
     .ef-deck-chevron,
     .modal.ef-modal-leaving .modal-content {

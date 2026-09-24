@@ -6,7 +6,7 @@ import { loadCardsForDeck } from "src/ui/review/load-cards";
 import type { ReviewCard } from "src/ui/review/load-cards";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboardInset } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboard } from "src/ui/modal-utils";
 import { fisherYates } from "src/utils/shuffle";
 import { resolveFaceIndex } from "src/utils/face";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
@@ -48,7 +48,7 @@ export class ConjureSentencesModal extends Modal {
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
         applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
-        this.stopKeyboardTracking = trackKeyboardInset(this.containerEl);
+        this.stopKeyboardTracking = trackKeyboard();
         this.contentEl.addClass("ef-conjure-sentences");
         this.addBackButton();
         this.load().catch(err => {

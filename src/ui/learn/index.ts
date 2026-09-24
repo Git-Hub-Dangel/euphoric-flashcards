@@ -11,7 +11,7 @@ import { globalDateProvider } from "src/scheduling/dates";
 import { previewInterval, applyResponse } from "src/scheduling/session-helpers";
 import { loadCardsForDeck, writeCardBack } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboardInset } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboard } from "src/ui/modal-utils";
 import { EditCardModal } from "src/ui/edit-card/index";
 import { writeGradedResponse, shiftLocationsForDelta } from "src/ui/shared/write-schedule";
 import { classifyPools } from "src/learn/pool";
@@ -74,7 +74,7 @@ export class LearnModal extends Modal {
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
         applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
-        this.stopKeyboardTracking = trackKeyboardInset(this.containerEl);
+        this.stopKeyboardTracking = trackKeyboard();
         this.contentEl.addClass("ef-review");
         this.addBackButton();
         this.load().catch(err => {

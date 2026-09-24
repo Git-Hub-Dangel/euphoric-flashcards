@@ -23,9 +23,11 @@ Euphoric Flashcards refines spaced repetition with features I found missing, or 
 * An Anki-like spaced-repetition algorithm with load balancing
 
 >[!WARNING] THIS GUIDE IS BEING MOVED
-> The below guide is being rewritten into a short follow-along getting-started guide on [its dedicated webpagee](https://www.jrdk.de/projects/euphoric-flashcards). Once complete, it will be removed from here.
+> Euphoric Flashcards has received updates and fixes way newer than this README illustrates.
+> A contemporary guide is currently being composed along docs on [its dedicated webpagee](https://www.jrdk.de/projects/euphoric-flashcards). It hasn't been completed yet. Once complete, this README will only contain a redirect.
 
-[This is a preview video demonstrating the syntax and UI](https://www.jrdk.de/notes/euphoric-flashcards#syntax-reference-video) 
+---
+
 ## 🧭 Where to?
 - If you're new to flashcards in Obsidian, I recommend you follow the [Quick Start Guide](#-quick-start-and-featureset) which happens to also be the full guide on the plugin. Takes at most about 10 minutes and introduces you cohesively to everything *Euphoric Flashcards* has to offer.
 - Are you transitioning from another flashcard plugin such as [OSR](https://github.com/st3v3nmw/obsidian-spaced-repetition)? *Euphoric Flashcards* is designed to be compatible with the scheduling- and card syntax of OSR with the only difference being that we use the symbols `-`, `:`, `=`, as unchangeable functional operators here. Therefore words/flashcards containing them as part of the content might cause the parser to interpret them incorrectly. I recommend you to refactor your flashcard notes to match the [syntax pattern](#1-card-syntax) by either manual means, or using the quick help of AI. You might then also skim over the [Quick Start Guide](#-quick-start-and-featureset) to make sure nothing surprises you.
