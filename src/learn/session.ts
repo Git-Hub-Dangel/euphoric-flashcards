@@ -7,7 +7,7 @@ import {
     groupProgress,
     isEligibleForSentences,
     isGroupComplete,
-    makeInitialHistories,
+    makeInitialStates,
     recordAgain,
     recordClear,
 } from "src/learn/group-state";
@@ -56,7 +56,7 @@ interface GroupContext {
     cards: CardLocation[];
     queue: LearnItem[];
     idx: number;
-    histories: Map<ParsedCard, GroupCardState>;
+    states: Map<ParsedCard, GroupCardState>;
     thresholds: number[];
     thresholdCursor: number;
     pendingTasks: SentenceWordSelection[][];
@@ -87,9 +87,9 @@ export class LearnSession {
     private seqCounter = 0;
     private carryoverForNext: CardLocation | null = null;
     // Carried card's stats snapshotted from the previous group so the new
-    // group's history seeds againCount / wasNew correctly (which drives
+    // group's state seeds againCount / wasNew correctly (which drives
     // sentence-planner weights).
-    private carryoverHistory: {
+    private carryoverState: {
         againCount: number;
         lastAgainSeq: number;
         wasNew: boolean;
@@ -136,8 +136,8 @@ export class LearnSession {
     // True iff the face currently sits in its card's pendingFaces set.
     private isFacePending(item: LearnItem): boolean {
         if (this.group === null) return false;
-        const h = this.group.histories.get(item.card);
-        return h !== undefined && h.pendingFaces.has(item.faceIndex);
+        const st = this.group.states.get(item.card);
+        return st !== undefined && st.pendingFaces.has(item.faceIndex);
     }
 
     // Whether the modal must actually persist a schedule for this item.
@@ -155,12 +155,12 @@ export class LearnSession {
         const wasPending = this.isFacePending(item);
 
         if (answer === "Again") {
-            recordAgain(g.histories, g.queue, g.idx, item, this.seqCounter, this.opts.rng);
+            recordAgain(g.states, g.queue, g.idx, item, this.seqCounter, this.opts.rng);
             g.idx++;
             // Again never writes.
         } else if (answer === "OK") {
             // Post-Again reset path.
-            recordClear(g.histories, item, ReviewResponse.Hard, true);
+            recordClear(g.states, item, ReviewResponse.Hard, true);
             g.idx++;
             if (this.shouldWrite(item)) {
                 writeIntent = { kind: "reset", response: ReviewResponse.Hard };
@@ -168,7 +168,7 @@ export class LearnSession {
         } else {
             // First-pass Okay / Good.
             const response = answer === "Good" ? ReviewResponse.Good : ReviewResponse.Hard;
-            recordClear(g.histories, item, response, wasPending);
+            recordClear(g.states, item, response, wasPending);
             g.idx++;
             if (this.shouldWrite(item)) {
                 writeIntent = { kind: "graded", response };
@@ -178,7 +178,7 @@ export class LearnSession {
         // Enqueue sentence tasks if the fresh progress crosses any threshold.
         this.enqueueDueSentenceTasks();
 
-        const groupCompleted = isGroupComplete(g.histories);
+        const groupCompleted = isGroupComplete(g.states);
         this.advanceIfGroupComplete();
         return { writeIntent, groupCompleted };
     }
@@ -216,24 +216,24 @@ export class LearnSession {
     // group is complete and either start the next one or finish.
     advanceIfGroupComplete(): void {
         if (this.group === null) return;
-        if (!isGroupComplete(this.group.histories)) return;
+        if (!isGroupComplete(this.group.states)) return;
         if (this.group.pendingTasks.length > 0) return;
         this.groupsCompleted++;
         // Pick carryover and snapshot its stats before we drop the context.
-        const carryCard = selectCarryover(this.group.histories, this.carried);
+        const carryCard = selectCarryover(this.group.states, this.carried);
         if (carryCard !== null) {
             const loc = this.group.cards.find(c => c.card === carryCard) ?? null;
-            const h = this.group.histories.get(carryCard)!;
+            const st = this.group.states.get(carryCard)!;
             this.carryoverForNext = loc;
-            this.carryoverHistory = {
-                againCount: h.againCount,
-                lastAgainSeq: h.lastAgainSeq,
-                wasNew: h.wasNew,
+            this.carryoverState = {
+                againCount: st.againCount,
+                lastAgainSeq: st.lastAgainSeq,
+                wasNew: st.wasNew,
             };
             this.carried.add(carryCard);
         } else {
             this.carryoverForNext = null;
-            this.carryoverHistory = null;
+            this.carryoverState = null;
         }
         this.group = null;
 
@@ -272,33 +272,33 @@ export class LearnSession {
         if (this.group === null) return { cleared: 0, total: 0 };
         let cleared = 0;
         const total = this.group.cards.length * 2;
-        for (const h of this.group.histories.values()) {
-            if (h.facesCleared[0]) cleared++;
-            if (h.facesCleared[1]) cleared++;
+        for (const st of this.group.states.values()) {
+            if (st.facesCleared[0]) cleared++;
+            if (st.facesCleared[1]) cleared++;
         }
         return { cleared, total };
     }
 
     private beginNextGroup(): void {
         const carry = this.carryoverForNext;
-        const carryHistory = this.carryoverHistory;
+        const carryState = this.carryoverState;
         this.carryoverForNext = null;
-        this.carryoverHistory = null;
+        this.carryoverState = null;
         const cards = buildLearnGroup(this.pools, this.used, carry);
         if (cards.length === 0) {
             this.done = true;
             return;
         }
-        const histories = makeInitialHistories(cards);
-        // For a carried card, re-seed history from the previous group so
+        const states = makeInitialStates(cards);
+        // For a carried card, seed state from the previous group so
         // againCount / wasNew keep driving weighted sampling. facesCleared
         // and pendingFaces reset for the new group.
-        if (carry !== null && carryHistory !== null) {
-            histories.set(carry.card, {
-                againCount: carryHistory.againCount,
-                lastAgainSeq: carryHistory.lastAgainSeq,
+        if (carry !== null && carryState !== null) {
+            states.set(carry.card, {
+                againCount: carryState.againCount,
+                lastAgainSeq: carryState.lastAgainSeq,
                 worst: ReviewResponse.Again,
-                wasNew: carryHistory.wasNew,
+                wasNew: carryState.wasNew,
                 pendingFaces: new Set(),
                 facesCleared: [false, false],
             });
@@ -311,13 +311,13 @@ export class LearnSession {
         const anchorsForSampling = this.pools.matureAnchors.filter(
             a => !cards.some(c => c.card === a.card),
         );
-        const taskCount = computeTaskCount(cards.map(c => c.card), histories);
+        const taskCount = computeTaskCount(cards.map(c => c.card), states);
         const thresholds = computeThresholds(taskCount);
         this.group = {
             cards,
             queue,
             idx: 0,
-            histories,
+            states,
             thresholds,
             thresholdCursor: 0,
             pendingTasks: [],
@@ -331,12 +331,12 @@ export class LearnSession {
         if (this.group === null) return;
         const g = this.group;
         // Recompute T lazily: fragility can grow as Again counts accrue.
-        const freshT = computeTaskCount(g.cards.map(c => c.card), g.histories);
+        const freshT = computeTaskCount(g.cards.map(c => c.card), g.states);
         if (freshT !== g.taskCount) {
             g.taskCount = freshT;
             g.thresholds = computeThresholds(freshT);
         }
-        const p = groupProgress(g.histories);
+        const p = groupProgress(g.states);
         const firing = tasksFiring(p, g.thresholds, g.thresholdCursor);
         for (let k = 0; k < firing; k++) {
             const draw = this.drawSentenceWords();
@@ -352,8 +352,8 @@ export class LearnSession {
         if (this.group === null) return [];
         const g = this.group;
         const eligible: CardLocation[] = g.cards.filter(loc => {
-            const h = g.histories.get(loc.card);
-            return h !== undefined && isEligibleForSentences(h);
+            const st = g.states.get(loc.card);
+            return st !== undefined && isEligibleForSentences(st);
         });
         // One face per draw, shared by every word in it.
         let faceIndex: 0 | 1;
@@ -365,7 +365,7 @@ export class LearnSession {
         }
         return pickSentenceWords({
             eligible,
-            histories: g.histories,
+            states: g.states,
             appearanceCounts: g.appearanceCounts,
             anchors: g.anchorsForSampling,
             wordCount: this.opts.wordCount,

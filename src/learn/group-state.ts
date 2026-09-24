@@ -63,7 +63,7 @@ export function buildInitialQueue(
     return queue;
 }
 
-export function makeInitialHistories(group: CardLocation[]): Map<ParsedCard, GroupCardState> {
+export function makeInitialStates(group: CardLocation[]): Map<ParsedCard, GroupCardState> {
     const out = new Map<ParsedCard, GroupCardState>();
     for (const loc of group) {
         const wasNew = loc.card.schedules[0] === null || loc.card.schedules[1] === null;
@@ -79,71 +79,71 @@ export function makeInitialHistories(group: CardLocation[]): Map<ParsedCard, Gro
     return out;
 }
 
-// Mutate history and queue in response to an Again on `item`. The item is
+// Mutate group state and queue in response to an Again on `item`. The item is
 // reinserted at least LEARN_AGAIN_MIN_LAG positions past `currentIdx`.
 export function recordAgain(
-    histories: Map<ParsedCard, GroupCardState>,
+    states: Map<ParsedCard, GroupCardState>,
     queue: LearnItem[],
     currentIdx: number,
     item: LearnItem,
     seq: number,
     rng: () => number = Math.random,
 ): void {
-    const h = stateFor(histories, item.card);
-    h.againCount++;
-    h.lastAgainSeq = seq;
-    h.pendingFaces.add(item.faceIndex);
-    h.worst = worstOf(h.worst, ReviewResponse.Again);
+    const st = stateFor(states, item.card);
+    st.againCount++;
+    st.lastAgainSeq = seq;
+    st.pendingFaces.add(item.faceIndex);
+    st.worst = worstOf(st.worst, ReviewResponse.Again);
     reinsertWithMinLag(queue, currentIdx, item, LEARN_AGAIN_MIN_LAG, rng);
 }
 
 // Clear a face. First-pass Okay/Good updates `worst`; post-Again OK clears
 // pending without altering `worst` beyond what Again already recorded.
 export function recordClear(
-    histories: Map<ParsedCard, GroupCardState>,
+    states: Map<ParsedCard, GroupCardState>,
     item: LearnItem,
     response: ReviewResponse,
     isPostAgain: boolean,
 ): void {
-    const h = stateFor(histories, item.card);
-    h.facesCleared[item.faceIndex] = true;
-    h.pendingFaces.delete(item.faceIndex);
-    if (!isPostAgain) h.worst = worstOf(h.worst, response);
+    const st = stateFor(states, item.card);
+    st.facesCleared[item.faceIndex] = true;
+    st.pendingFaces.delete(item.faceIndex);
+    if (!isPostAgain) st.worst = worstOf(st.worst, response);
 }
 
-export function isGroupComplete(histories: Map<ParsedCard, GroupCardState>): boolean {
-    for (const h of histories.values()) {
-        if (!h.facesCleared[0] || !h.facesCleared[1]) return false;
+export function isGroupComplete(states: Map<ParsedCard, GroupCardState>): boolean {
+    for (const st of states.values()) {
+        if (!st.facesCleared[0] || !st.facesCleared[1]) return false;
     }
     return true;
 }
 
-export function groupProgress(histories: Map<ParsedCard, GroupCardState>): number {
+export function groupProgress(states: Map<ParsedCard, GroupCardState>): number {
     let total = 0;
     let cleared = 0;
-    for (const h of histories.values()) {
+    for (const st of states.values()) {
         total += 2;
-        if (h.facesCleared[0]) cleared++;
-        if (h.facesCleared[1]) cleared++;
+        if (st.facesCleared[0]) cleared++;
+        if (st.facesCleared[1]) cleared++;
     }
     return total === 0 ? 0 : cleared / total;
 }
 
 // Eligible for sentence sampling: at least one face cleared and no face still
 // pending after an Again.
-export function isEligibleForSentences(h: GroupCardState): boolean {
-    return (h.facesCleared[0] || h.facesCleared[1]) && h.pendingFaces.size === 0;
+export function isEligibleForSentences(st: GroupCardState): boolean {
+    return (st.facesCleared[0] || st.facesCleared[1]) && st.pendingFaces.size === 0;
 }
 
 // Group state is seeded for every group card when the group is built. A miss
 // means the queue and the state map have diverged, which is a bug worth
 // surfacing rather than papering over with a blank record.
 function stateFor(map: Map<ParsedCard, GroupCardState>, card: ParsedCard): GroupCardState {
-    const h = map.get(card);
-    if (h === undefined) {
+    const st = map.get(card);
+    if (st === undefined) {
         throw new Error(`Learn: no group state for card "${card.fields.word}"`);
     }
-    return h;
+    return st;
 }
 
 // ReviewResponse enum encodes quality: Easy=0, Good=1, Hard=2, Again=3.

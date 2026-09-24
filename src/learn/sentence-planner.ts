@@ -8,15 +8,15 @@ import { LEARN_SENTENCE_TRIGGER } from "src/learn/constants";
 // cards) get more; capped so tasks never exceed ceil(G/2).
 export function computeTaskCount(
     groupCards: readonly ParsedCard[],
-    histories: Map<ParsedCard, GroupCardState>,
+    states: Map<ParsedCard, GroupCardState>,
 ): number {
     const G = groupCards.length;
     if (G === 0) return 0;
     let f = 0;
     for (const c of groupCards) {
-        const h = histories.get(c);
-        if (h === undefined) continue;
-        if (h.wasNew || h.againCount >= 1) f++;
+        const st = states.get(c);
+        if (st === undefined) continue;
+        if (st.wasNew || st.againCount >= 1) f++;
     }
     const rawT = 1 + (f >= 2 ? 1 : 0) + (f >= 4 ? 1 : 0);
     return Math.min(rawT, Math.ceil(G / 2));
@@ -45,11 +45,11 @@ export function tasksFiring(progress: number, thresholds: readonly number[], cur
     return n;
 }
 
-function baseWeight(h: GroupCardState | undefined): number {
-    if (h === undefined) return 1;
-    if (h.againCount >= 1) return 4;
-    if (h.wasNew) return 3;
-    if (h.worst === ReviewResponse.Hard) return 2;
+function baseWeight(st: GroupCardState | undefined): number {
+    if (st === undefined) return 1;
+    if (st.againCount >= 1) return 4;
+    if (st.wasNew) return 3;
+    if (st.worst === ReviewResponse.Hard) return 2;
     return 1;
 }
 
@@ -81,14 +81,14 @@ export interface SentenceWordSelection {
 
 export function pickSentenceWords(opts: {
     eligible: readonly CardLocation[];
-    histories: Map<ParsedCard, GroupCardState>;
+    states: Map<ParsedCard, GroupCardState>;
     appearanceCounts: Map<ParsedCard, number>;
     anchors: readonly AnchorLocation[];
     wordCount: number;
     faceIndex: 0 | 1;
     rng: () => number;
 }): SentenceWordSelection[] {
-    const { eligible, histories, appearanceCounts, anchors, wordCount, faceIndex, rng } = opts;
+    const { eligible, states, appearanceCounts, anchors, wordCount, faceIndex, rng } = opts;
     if (wordCount <= 0 || eligible.length === 0) return [];
 
     // With w=1 the single slot is always a group word. With w>=2 an anchor
@@ -99,7 +99,7 @@ export function pickSentenceWords(opts: {
 
     const weights = eligible.map(loc => {
         const u = appearanceCounts.get(loc.card) ?? 0;
-        return baseWeight(histories.get(loc.card)) * Math.pow(0.5, u);
+        return baseWeight(states.get(loc.card)) * Math.pow(0.5, u);
     });
     const groupIdx = weightedSampleWithoutReplacement(weights, groupSlots, rng);
     const picks: SentenceWordSelection[] = groupIdx.map(i => ({
