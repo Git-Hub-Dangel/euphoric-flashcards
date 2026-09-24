@@ -143,13 +143,13 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             type: "slider",
                             key: "learnGroupsPerSession",
                             min: 1,
-                            max: 10,
+                            max: 5,
                             step: 1,
                         },
                     },
                     {
                         name: "Card side for conjuring sentences",
-                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native / proficient language. (e.g. If you use the syntax 'word - translation', then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word in your target language, then apply it. This setting only applies if the Learn mode session itself is intiated as 'Shuffle' (default) in the explorer.",
+                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native / proficient language. (e.g. If you use the syntax 'word - translation', then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word in your target language, then apply it.",
                         control: {
                             type: "dropdown",
                             key: "learnSentenceSide",
