@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type { SettingDefinitionItem } from "obsidian";
+import type { SettingDefinitionItem, TFile } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { ConstructionConstraintCollection, TypeConfig } from "src/settings/index";
 import { DEFAULT_SETTINGS } from "src/settings/index";
@@ -26,12 +26,15 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 .split(/[\n,]+/)
                 .map(t => t.trim())
                 .filter(t => t.length > 0);
-        } else if (key === "startOfDay") {
+        } else if (key === "startOfDay" || key === "depositInboxPath") {
             s[key] = typeof value === "string" ? value.trim() : value;
         } else {
             s[key] = value;
         }
         await this.plugin.saveData_();
+        // The deposit inbox and notification rows are disabled while the
+        // feature is off, so their disabled state has to be re-evaluated.
+        if (key === "enableSentenceDeposit") this.update();
     }
 
     getSettingDefinitions(): SettingDefinitionItem[] {
@@ -182,6 +185,34 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             type: "dropdown",
                             key: "conjureSentencesSelection",
                             options: { Optimised: "Optimised", Random: "Random" },
+                        },
+                    },
+                    {
+                        name: "Enable sentence deposit",
+                        desc: "When on, sentence exercises show an input below the word list. Pressing 'Good' appends what you typed to the deposit inbox note as a new line. Works in Conjure Sentences and in the sentence steps of Learn mode.",
+                        control: {
+                            type: "toggle",
+                            key: "enableSentenceDeposit",
+                        },
+                    },
+                    {
+                        name: "Deposit inbox",
+                        desc: "The note your sentences are appended to. Sentences are added at the end of the file, one per line.",
+                        control: {
+                            type: "file",
+                            key: "depositInboxPath",
+                            placeholder: "Inbox/Sentences.md",
+                            filter: (file: TFile): boolean => file.extension === "md",
+                            disabled: (): boolean => !this.plugin.data.settings.enableSentenceDeposit,
+                        },
+                    },
+                    {
+                        name: "Show deposit notification",
+                        desc: "Show a confirmation banner after a sentence is appended. Failures are always reported regardless of this setting.",
+                        control: {
+                            type: "toggle",
+                            key: "showDepositNotification",
+                            disabled: (): boolean => !this.plugin.data.settings.enableSentenceDeposit,
                         },
                     },
                     {

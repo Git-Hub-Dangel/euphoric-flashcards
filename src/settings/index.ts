@@ -43,6 +43,9 @@ export interface EuphoricSettings {
     defaultConjureSentencesSide: CardSide;
     conjureSentencesWordCount: number;
     conjureSentencesSelection: WordSelection;
+    enableSentenceDeposit: boolean;
+    depositInboxPath: string;
+    showDepositNotification: boolean;
     enableConstructionConstraints: boolean;
     constructionConstraints: ConstructionConstraintCollection[];
 
@@ -80,6 +83,9 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     defaultConjureSentencesSide: "Shuffle",
     conjureSentencesWordCount: 3,
     conjureSentencesSelection: "Optimised",
+    enableSentenceDeposit: false,
+    depositInboxPath: "",
+    showDepositNotification: true,
     enableConstructionConstraints: false,
     constructionConstraints: [],
 

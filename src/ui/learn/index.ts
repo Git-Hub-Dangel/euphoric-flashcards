@@ -11,7 +11,7 @@ import { globalDateProvider } from "src/scheduling/dates";
 import { previewInterval, applyResponse } from "src/scheduling/session-helpers";
 import { loadCardsForDeck, writeCardBack } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboardInset } from "src/ui/modal-utils";
 import { EditCardModal } from "src/ui/edit-card/index";
 import { writeGradedResponse, shiftLocationsForDelta } from "src/ui/shared/write-schedule";
 import { classifyPools } from "src/learn/pool";
@@ -20,8 +20,8 @@ import type { LearnItem } from "src/learn/group-state";
 import type { WriteIntent } from "src/learn/session";
 import type { SentenceWordSelection } from "src/learn/sentence-planner";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
-import { createSentenceList, drawSentence, redrawSentence } from "src/ui/shared/sentence-view";
-import type { SentenceWord, SentenceDrawOptions } from "src/ui/shared/sentence-view";
+import { commitDeposit, createSentenceSurface, drawSentence, readDeposit, redrawSentence } from "src/ui/shared/sentence-renderer";
+import type { SentenceWord, SentenceDrawOptions, SentenceSurface } from "src/ui/shared/sentence-renderer";
 import { renderResponseButton } from "src/ui/shared/response-button";
 
 export interface LearnModalOptions {
@@ -54,11 +54,13 @@ export class LearnModal extends Modal {
     // between steps the borders stay static. Body containers stagger on every swap.
     private firstRender = true;
     private constraintPool: string[] = [];
+    private stopKeyboardTracking: (() => void) | null = null;
+    private depositing = false;
 
     private headerEl: HTMLElement | null = null;
     private bodyEl: HTMLElement | null = null;
     private footerEl: HTMLElement | null = null;
-    private sentenceListEl: HTMLElement | null = null;
+    private sentenceSurface: SentenceSurface | null = null;
 
     constructor(app: App, plugin: EuphoricFlashcardsPlugin, node: DeckNode, options: LearnModalOptions) {
         super(app);
@@ -72,6 +74,7 @@ export class LearnModal extends Modal {
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
         applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
+        this.stopKeyboardTracking = trackKeyboardInset(this.containerEl);
         this.contentEl.addClass("ef-review");
         this.addBackButton();
         this.load().catch(err => {
@@ -83,6 +86,8 @@ export class LearnModal extends Modal {
 
     onClose(): void {
         this.clearKeymap();
+        this.stopKeyboardTracking?.();
+        this.stopKeyboardTracking = null;
         this.contentEl.empty();
     }
 
@@ -108,7 +113,12 @@ export class LearnModal extends Modal {
     }
 
     private addKey(key: string, fn: () => void): void {
-        this.keymapHandlers.push(this.scope.register([], key, () => { fn(); return false; }));
+        this.keymapHandlers.push(this.scope.register([], key, (evt) => {
+            // Typing in the deposit input must not trigger a response button.
+            if (isTextEntryEvent(evt)) return true;
+            fn();
+            return false;
+        }));
     }
 
     private async load(): Promise<void> {
@@ -194,7 +204,7 @@ export class LearnModal extends Modal {
 
         this.bodyEl.empty();
         this.bodyEl.removeClass("ef-sentence-body");
-        this.sentenceListEl = null;
+        this.sentenceSurface = null;
         const face: CardFace = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
         const reveal = cardReveal(item.card);
         const settings = this.plugin.data.settings;
@@ -334,15 +344,15 @@ export class LearnModal extends Modal {
             },
         };
 
-        // Consecutive sentence steps reuse the list so the pill can fade across
-        // a regenerate. Arriving from a face view builds it fresh.
-        if (this.sentenceListEl) {
-            redrawSentence(this.sentenceListEl, drawOpts);
+        // Consecutive sentence steps reuse the surface so the pill can fade
+        // across a regenerate. Arriving from a face view builds it fresh.
+        if (this.sentenceSurface) {
+            redrawSentence(this.sentenceSurface, drawOpts);
         } else {
             this.bodyEl.empty();
             this.bodyEl.addClass("ef-sentence-body");
-            this.sentenceListEl = createSentenceList(this.bodyEl);
-            drawSentence(this.sentenceListEl, drawOpts);
+            this.sentenceSurface = createSentenceSurface(this.bodyEl, this.plugin.data.settings);
+            drawSentence(this.sentenceSurface, drawOpts);
         }
 
         this.firstRender = false;
@@ -351,11 +361,7 @@ export class LearnModal extends Modal {
     private renderSentenceActions(): void {
         if (!this.footerEl) return;
         this.footerEl.empty();
-        const onGood = (): void => {
-            if (!this.session) return;
-            this.session.dismissSentence();
-            this.renderStep();
-        };
+        const onGood = (): void => { void this.handleSentenceGood(); };
         const onRegen = (): void => {
             if (!this.session) return;
             this.session.regenerateSentence();
@@ -363,6 +369,26 @@ export class LearnModal extends Modal {
         };
         this.addResponseButton(this.footerEl, 1, "Regenerate", "ef-btn-regen", "refresh-cw", null, onRegen);
         this.addResponseButton(this.footerEl, 2, "Good", "ef-btn-good", "check", null, onGood);
+    }
+
+    // Deposits the typed sentence before the step advances and wipes it. A
+    // failed deposit holds the step so the draft survives for a retry.
+    private async handleSentenceGood(): Promise<void> {
+        if (!this.session || !this.sentenceSurface || this.depositing) return;
+        this.depositing = true;
+        try {
+            const ok = await commitDeposit({
+                vault: this.app.vault,
+                settings: this.plugin.data.settings,
+                raw: readDeposit(this.sentenceSurface),
+                fileCache: this.fileCache,
+            });
+            if (!ok) return;
+        } finally {
+            this.depositing = false;
+        }
+        this.session.dismissSentence();
+        this.renderStep();
     }
 
     private openEditCardModal(item: LearnItem): void {
@@ -410,7 +436,7 @@ export class LearnModal extends Modal {
     private renderDone(groupsCompleted: number): void {
         this.clearKeymap();
         this.contentEl.empty();
-        this.sentenceListEl = null;
+        this.sentenceSurface = null;
         this.contentEl.createDiv({ cls: "ef-done" }, div => {
             staggerIn(div.createEl("h2", { text: "Session complete!" }), 0);
             staggerIn(div.createEl("p", {

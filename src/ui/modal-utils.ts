@@ -74,3 +74,30 @@ export function fadeOutThen(modal: Modal, next: () => void): void {
     modal.modalEl.addClass("ef-modal-leaving");
     window.setTimeout(next, 120);
 }
+
+// True when a key event came from a text entry field. Modal key handlers use
+// it so typing a digit into an input does not also fire a response button.
+export function isTextEntryEvent(evt: KeyboardEvent): boolean {
+    const target = evt.target;
+    if (!(target instanceof HTMLElement)) return false;
+    return target.closest('input, textarea, [contenteditable="true"]') !== null;
+}
+
+// Keeps `--ef-kb-inset` in sync with the on screen keyboard. iOS shrinks only
+// the visual viewport when the keyboard opens, so bottom chrome would sit
+// underneath it. Returns a disposer the modal calls in onClose.
+export function trackKeyboardInset(containerEl: HTMLElement): () => void {
+    const vv = window.visualViewport;
+    if (!vv) return () => { /* no viewport api, nothing to track */ };
+    const update = (): void => {
+        const inset = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+        containerEl.setCssProps({ "--ef-kb-inset": `${Math.round(inset)}px` });
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+        vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
+    };
+}

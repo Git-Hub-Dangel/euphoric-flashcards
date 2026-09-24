@@ -6,13 +6,13 @@ import { loadCardsForDeck } from "src/ui/review/load-cards";
 import type { ReviewCard } from "src/ui/review/load-cards";
 import type { CardSide, WordSelection } from "src/settings";
 import { ExplorerModal } from "src/ui/explorer/index";
-import { addCloseButton, applyAnimationDuration, fadeOutThen, preventBgTapDismiss, staggerIn } from "src/ui/modal-utils";
+import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboardInset } from "src/ui/modal-utils";
 import { fisherYates } from "src/utils/shuffle";
 import { resolveFaceIndex } from "src/utils/face";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
 import { renderResponseButton } from "src/ui/shared/response-button";
-import { createSentenceList, redrawSentence } from "src/ui/shared/sentence-view";
-import type { SentenceWord } from "src/ui/shared/sentence-view";
+import { commitDeposit, createSentenceSurface, readDeposit, redrawSentence } from "src/ui/shared/sentence-renderer";
+import type { SentenceSurface, SentenceWord } from "src/ui/shared/sentence-renderer";
 
 export interface ConjureSentencesOptions {
     cardSide: CardSide;
@@ -26,9 +26,11 @@ export class ConjureSentencesModal extends Modal {
     private readonly options: ConjureSentencesOptions;
 
     private allCards: ReviewCard[] = [];
-    private wordListEl: HTMLElement | null = null;
+    private surface: SentenceSurface | null = null;
     private footerEl: HTMLElement | null = null;
     private constraintPool: string[] = [];
+    private stopKeyboardTracking: (() => void) | null = null;
+    private depositing = false;
 
     constructor(
         app: App,
@@ -46,6 +48,7 @@ export class ConjureSentencesModal extends Modal {
         preventBgTapDismiss(this.containerEl);
         addCloseButton(this);
         applyAnimationDuration(this.containerEl, this.plugin.data.settings.animationDurationMs);
+        this.stopKeyboardTracking = trackKeyboardInset(this.containerEl);
         this.contentEl.addClass("ef-conjure-sentences");
         this.addBackButton();
         this.load().catch(err => {
@@ -56,6 +59,8 @@ export class ConjureSentencesModal extends Modal {
     }
 
     onClose(): void {
+        this.stopKeyboardTracking?.();
+        this.stopKeyboardTracking = null;
         this.contentEl.empty();
     }
 
@@ -112,18 +117,44 @@ export class ConjureSentencesModal extends Modal {
         });
         staggerIn(headerEl, 0);
 
-        this.wordListEl = createSentenceList(this.contentEl);
+        this.surface = createSentenceSurface(this.contentEl, this.plugin.data.settings);
 
         this.footerEl = this.contentEl.createDiv({ cls: "ef-cs-footer" });
-        staggerIn(this.footerEl, 1);
+        staggerIn(this.footerEl, 2);
 
-        this.scope.register([], "1", () => { this.drawWords(); return false; });
-        this.scope.register([], "2", () => { this.drawWords(); return false; });
+        this.scope.register([], "1", (evt) => {
+            if (isTextEntryEvent(evt)) return true;
+            this.drawWords();
+            return false;
+        });
+        this.scope.register([], "2", (evt) => {
+            if (isTextEntryEvent(evt)) return true;
+            void this.handleGood();
+            return false;
+        });
+    }
+
+    // Deposits the typed sentence before the redraw wipes it. A failed
+    // deposit holds the surface so the draft survives for a retry.
+    private async handleGood(): Promise<void> {
+        if (!this.surface || this.depositing) return;
+        this.depositing = true;
+        try {
+            const ok = await commitDeposit({
+                vault: this.app.vault,
+                settings: this.plugin.data.settings,
+                raw: readDeposit(this.surface),
+            });
+            if (!ok) return;
+        } finally {
+            this.depositing = false;
+        }
+        this.drawWords();
     }
 
     private drawWords(): void {
-        if (!this.wordListEl) return;
-        redrawSentence(this.wordListEl, {
+        if (!this.surface) return;
+        redrawSentence(this.surface, {
             settings: this.plugin.data.settings,
             constraintPool: this.constraintPool,
             words: () => this.selectWords(),
@@ -145,7 +176,7 @@ export class ConjureSentencesModal extends Modal {
         });
         renderResponseButton(this.footerEl, settings, {
             keyNum: 2, label: "Good", cls: "ef-btn-good", icon: "check",
-            onClick: () => this.drawWords(),
+            onClick: () => { void this.handleGood(); },
         });
     }
 

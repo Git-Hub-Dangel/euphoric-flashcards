@@ -1,11 +1,31 @@
 import type { EuphoricSettings } from "src/settings";
 import type { ParsedCard } from "src/parsing";
 import { staggerIn } from "src/ui/modal-utils";
-import { renderWordRow } from "src/ui/shared/word-row";
+import { renderWordRow } from "src/ui/shared/sentence-renderer/word-row";
+import {
+    clearDepositValue,
+    isDepositEnabled,
+    readDepositValue,
+    renderDepositBar,
+} from "src/ui/shared/sentence-renderer/deposit";
+
+export { commitDeposit, isDepositEnabled } from "src/ui/shared/sentence-renderer/deposit";
+export type { CommitDepositOptions } from "src/ui/shared/sentence-renderer/deposit";
 
 export interface SentenceWord {
     card: ParsedCard;
     faceIndex: 0 | 1;
+}
+
+/**
+ * The sentence surface owned by Conjure Sentences and Learn. The scrollable
+ * word list plus the pinned deposit bar underneath it. A host must place it
+ * in a flex column above its action row and must not centre or pad the list.
+ */
+export interface SentenceSurface {
+    listEl: HTMLElement;
+    /** Null while the deposit feature is off. */
+    depositEl: HTMLElement | null;
 }
 
 export interface SentenceDrawOptions {
@@ -23,18 +43,22 @@ export interface SentenceDrawOptions {
     renderChrome?: () => void;
 }
 
-/**
- * The sentence surface shared by Conjure Sentences and Learn. The list owns its
- * own padding and reading width, so a host must not centre or pad it.
- */
-export function createSentenceList(host: HTMLElement): HTMLElement {
-    return host.createDiv({ cls: "ef-cs-word-list" });
+export function createSentenceSurface(host: HTMLElement, settings: EuphoricSettings): SentenceSurface {
+    const listEl = host.createDiv({ cls: "ef-cs-word-list" });
+    const depositEl = isDepositEnabled(settings) ? renderDepositBar(host) : null;
+    return { listEl, depositEl };
+}
+
+/** Current deposit draft. Empty while the feature is off. */
+export function readDeposit(surface: SentenceSurface): string {
+    return readDepositValue(surface.depositEl);
 }
 
 /** Fills the list with one constraint pill plus one row per word. */
-export function drawSentence(listEl: HTMLElement, opts: SentenceDrawOptions): void {
+export function drawSentence(surface: SentenceSurface, opts: SentenceDrawOptions): void {
     opts.renderChrome?.();
-    fillSentence(listEl, opts);
+    clearDepositValue(surface.depositEl);
+    fillSentence(surface.listEl, opts);
 }
 
 function fillSentence(listEl: HTMLElement, opts: SentenceDrawOptions): void {
@@ -61,10 +85,12 @@ function fillSentence(listEl: HTMLElement, opts: SentenceDrawOptions): void {
 }
 
 /** Redraw over an existing draw. Fades the outgoing pill first when animated. */
-export function redrawSentence(listEl: HTMLElement, opts: SentenceDrawOptions): void {
-    // Chrome replays immediately so the tap reads as acknowledged while the
-    // outgoing pill is still fading.
+export function redrawSentence(surface: SentenceSurface, opts: SentenceDrawOptions): void {
+    // Chrome replays and the draft clears immediately so the tap reads as
+    // acknowledged while the outgoing pill is still fading.
     opts.renderChrome?.();
+    clearDepositValue(surface.depositEl);
+    const listEl = surface.listEl;
     const existingPill = listEl.querySelector<HTMLElement>(".ef-cc-pill");
     if (existingPill && opts.settings.animationDurationMs > 0) {
         existingPill.addClass("ef-fading");
