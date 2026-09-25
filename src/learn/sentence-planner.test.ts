@@ -207,6 +207,62 @@ describe("pickSentenceWords", () => {
         expect(picks[0]!.isAnchor).toBe(false);
     });
 
+    it("spreads anchor draws instead of locking onto the shortest interval", () => {
+        // The old 1/interval weighting handed the 25d anchor over half of all
+        // draws. The clamped tilt plus fuzz keeps every anchor in play.
+        const intervals = [25, 90, 120, 200, 365, 400];
+        const anchors: AnchorLocation[] = intervals.map(iv => ({
+            ...makeCard([sched("2030-01-01", iv), sched("2030-01-01", iv)], { word: `a${iv}` }),
+            interval: iv,
+        }));
+        const states = new Map([[cardA.card, state()]]);
+        const counts = new Map<string, number>();
+        const rng = mulberry32(7);
+        const draws = 600;
+        for (let i = 0; i < draws; i++) {
+            const pick = pickSentenceWords({
+                eligible: [cardA],
+                states,
+                appearanceCounts: new Map(),
+                anchors,
+                wordCount: 2,
+                faceIndex: 0,
+                rng,
+            }).find(p => p.isAnchor)!;
+            const w = pick.card.fields.word;
+            counts.set(w, (counts.get(w) ?? 0) + 1);
+        }
+        const shares = intervals.map(iv => (counts.get(`a${iv}`) ?? 0) / draws);
+        expect(Math.max(...shares)).toBeLessThan(0.45);
+        expect(Math.min(...shares)).toBeGreaterThan(0.05);
+    });
+
+    it("decays an anchor that has already appeared this session", () => {
+        const seen = makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)], { word: "seen" });
+        const unseen = makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)], { word: "unseen" });
+        const anchors: AnchorLocation[] = [
+            { ...seen, interval: 60 },
+            { ...unseen, interval: 60 },
+        ];
+        const states = new Map([[cardA.card, state()]]);
+        const rng = mulberry32(11);
+        let unseenWins = 0;
+        for (let i = 0; i < 100; i++) {
+            const pick = pickSentenceWords({
+                eligible: [cardA],
+                states,
+                appearanceCounts: new Map(),
+                anchors,
+                anchorCounts: new Map([[seen.card, 2]]),
+                wordCount: 2,
+                faceIndex: 0,
+                rng,
+            }).find(p => p.isAnchor)!;
+            if (pick.card === unseen.card) unseenWins++;
+        }
+        expect(unseenWins).toBeGreaterThan(75);
+    });
+
     it("decay reduces the effective weight of already-appeared cards", () => {
         // Two candidates with same base weight (both worst=Hard → 2). A has
         // appeared 3 times, B zero times. B should almost always be picked.

@@ -382,3 +382,46 @@ describe("LearnSession — sentenceSide override", () => {
         }
     });
 });
+
+describe("LearnSession — anchor sampling", () => {
+    // Nine new cards force two groups; the semi-mature card is anchor material
+    // and also youngFiller, so the second group may study it.
+    function anchorSession(): { session: LearnSession; semiWord: string } {
+        const semi = makeCard([sched("2026-02-15", 14), sched("2026-02-20", 16)], { word: "semi" });
+        const cards = [...newCards(9, "n"), semi];
+        const rng = mulberry32(5);
+        const pools = classifyPools(cards, TODAY, rng);
+        expect(pools.matureAnchors).toHaveLength(1);
+        const session = new LearnSession(pools, {
+            groupLimit: 2,
+            wordCount: 2,
+            today: TODAY,
+            rng,
+        });
+        session.start();
+        return { session, semiWord: semi.card.fields.word };
+    }
+
+    it("never draws a card as an anchor once the session has studied it", () => {
+        const { session, semiWord } = anchorSession();
+        const studied = new Set<string>();
+        const violations: string[] = [];
+        drain(
+            session,
+            () => "Good",
+            step => {
+                if (step.kind === "face") studied.add(step.item.card.fields.word);
+                if (step.kind === "sentence") {
+                    for (const w of step.words) {
+                        if (w.isAnchor && studied.has(w.card.fields.word)) {
+                            violations.push(w.card.fields.word);
+                        }
+                    }
+                }
+            },
+        );
+        expect(studied.size).toBeGreaterThan(0);
+        expect(studied.has(semiWord)).toBe(true);
+        expect(violations).toEqual([]);
+    });
+});

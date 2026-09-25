@@ -2,7 +2,13 @@ import type { ParsedCard } from "src/parsing";
 import { ReviewResponse } from "src/scheduling/review-response";
 import type { AnchorLocation, CardLocation } from "src/learn/pool";
 import type { GroupCardState } from "src/learn/group-state";
-import { LEARN_SENTENCE_TRIGGER } from "src/learn/constants";
+import {
+    LEARN_ANCHOR_FUZZ,
+    LEARN_ANCHOR_REF_DAYS,
+    LEARN_ANCHOR_TILT_MAX,
+    LEARN_ANCHOR_TILT_MIN,
+    LEARN_SENTENCE_TRIGGER,
+} from "src/learn/constants";
 
 // Number of sentence tasks for this group. Fragile groups (many new + Again
 // cards) get more; capped so tasks never exceed ceil(G/2).
@@ -53,6 +59,18 @@ function baseWeight(st: GroupCardState | undefined): number {
     return 1;
 }
 
+// Mild tilt toward the anchors closest to slipping, clamped so one short
+// interval anchor cannot own every draw, jittered so neighbouring intervals
+// reorder between draws, and halved per prior appearance this session.
+function anchorWeight(interval: number, seen: number, rng: () => number): number {
+    const tilt = Math.min(
+        LEARN_ANCHOR_TILT_MAX,
+        Math.max(LEARN_ANCHOR_TILT_MIN, LEARN_ANCHOR_REF_DAYS / Math.max(interval, 1)),
+    );
+    const fuzz = 1 - LEARN_ANCHOR_FUZZ + 2 * LEARN_ANCHOR_FUZZ * rng();
+    return tilt * fuzz * Math.pow(0.5, seen);
+}
+
 // Weighted sampling without replacement via the exponential-jump trick:
 // keys = -ln(u) / weight; smallest k keys win. Deterministic given rng.
 export function weightedSampleWithoutReplacement(
@@ -84,11 +102,13 @@ export function pickSentenceWords(opts: {
     states: Map<ParsedCard, GroupCardState>;
     appearanceCounts: Map<ParsedCard, number>;
     anchors: readonly AnchorLocation[];
+    // Session scoped anchor appearances. Absent means none have been drawn.
+    anchorCounts?: Map<ParsedCard, number>;
     wordCount: number;
     faceIndex: 0 | 1;
     rng: () => number;
 }): SentenceWordSelection[] {
-    const { eligible, states, appearanceCounts, anchors, wordCount, faceIndex, rng } = opts;
+    const { eligible, states, appearanceCounts, anchors, anchorCounts, wordCount, faceIndex, rng } = opts;
     if (wordCount <= 0 || eligible.length === 0) return [];
 
     // With w=1 the single slot is always a group word. With w>=2 an anchor
@@ -110,7 +130,9 @@ export function pickSentenceWords(opts: {
     }));
 
     if (anchorSlot === 1) {
-        const anchorWeights = anchors.map(a => 1 / Math.max(a.interval, 1));
+        const anchorWeights = anchors.map(a =>
+            anchorWeight(a.interval, anchorCounts?.get(a.card) ?? 0, rng),
+        );
         const [pickIdx] = weightedSampleWithoutReplacement(anchorWeights, 1, rng);
         if (pickIdx !== undefined) {
             picks.push({

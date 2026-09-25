@@ -62,7 +62,7 @@ interface GroupContext {
     pendingTasks: SentenceWordSelection[][];
     appearanceCounts: Map<ParsedCard, number>;
     taskCount: number;
-    // Snapshot of anchors excluding this group's cards (for sentence sampling).
+    // Snapshot of anchors excluding every card the session has used.
     anchorsForSampling: AnchorLocation[];
 }
 
@@ -80,6 +80,9 @@ export class LearnSession {
     private readonly effectiveLimit: number;
 
     private readonly used = new Set<ParsedCard>();
+    // Anchor appearances live for the whole session, not the group, so a small
+    // anchor pool still spreads across every sentence task.
+    private readonly anchorAppearances = new Map<ParsedCard, number>();
     private readonly carried = new Set<ParsedCard>();
     private readonly writtenFaces = new Set<string>();
 
@@ -201,14 +204,10 @@ export class LearnSession {
         if (this.group === null || this.group.pendingTasks.length === 0) return null;
         // Roll back the appearance counts from the outgoing pick before rerolling.
         const outgoing = this.group.pendingTasks[0]!;
-        for (const w of outgoing) {
-            if (!w.isAnchor) this.bumpAppearance(w.card, -1);
-        }
+        for (const w of outgoing) this.bumpAppearance(w, -1);
         const fresh = this.drawSentenceWords();
         this.group.pendingTasks[0] = fresh;
-        for (const w of fresh) {
-            if (!w.isAnchor) this.bumpAppearance(w.card, +1);
-        }
+        for (const w of fresh) this.bumpAppearance(w, +1);
         return fresh;
     }
 
@@ -308,9 +307,9 @@ export class LearnSession {
             (card, faceIndex) => isFaceDue(card.schedules[faceIndex], this.opts.today),
             this.opts.rng,
         );
-        const anchorsForSampling = this.pools.matureAnchors.filter(
-            a => !cards.some(c => c.card === a.card),
-        );
+        // `used` already holds this group's cards, so one filter covers both
+        // the live group and anything studied in an earlier group.
+        const anchorsForSampling = this.pools.matureAnchors.filter(a => !this.used.has(a.card));
         const taskCount = computeTaskCount(cards.map(c => c.card), states);
         const thresholds = computeThresholds(taskCount);
         this.group = {
@@ -341,9 +340,7 @@ export class LearnSession {
         for (let k = 0; k < firing; k++) {
             const draw = this.drawSentenceWords();
             g.pendingTasks.push(draw);
-            for (const w of draw) {
-                if (!w.isAnchor) this.bumpAppearance(w.card, +1);
-            }
+            for (const w of draw) this.bumpAppearance(w, +1);
             g.thresholdCursor++;
         }
     }
@@ -368,16 +365,18 @@ export class LearnSession {
             states: g.states,
             appearanceCounts: g.appearanceCounts,
             anchors: g.anchorsForSampling,
+            anchorCounts: this.anchorAppearances,
             wordCount: this.opts.wordCount,
             faceIndex,
             rng: this.opts.rng,
         });
     }
 
-    private bumpAppearance(card: ParsedCard, delta: number): void {
+    private bumpAppearance(word: SentenceWordSelection, delta: number): void {
         if (this.group === null) return;
-        const prev = this.group.appearanceCounts.get(card) ?? 0;
-        this.group.appearanceCounts.set(card, Math.max(0, prev + delta));
+        const counts = word.isAnchor ? this.anchorAppearances : this.group.appearanceCounts;
+        const prev = counts.get(word.card) ?? 0;
+        counts.set(word.card, Math.max(0, prev + delta));
     }
 
 }

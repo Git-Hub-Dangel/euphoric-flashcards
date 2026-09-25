@@ -2,7 +2,7 @@ import type { ParsedCard } from "src/parsing";
 import type { ScheduleInfo } from "src/persistence";
 import { isFaceDue } from "src/scheduling/due";
 import { fisherYates } from "src/utils/shuffle";
-import { LEARN_MATURE_INTERVAL_DAYS } from "src/learn/constants";
+import { LEARN_ANCHOR_MIN_INTERVAL_DAYS, LEARN_MATURE_INTERVAL_DAYS } from "src/learn/constants";
 
 export interface CardLocation {
     card: ParsedCard;
@@ -83,11 +83,14 @@ export function classifyPools(
         const mature = iv >= LEARN_MATURE_INTERVAL_DAYS;
         if (hasDue) {
             (mature ? matureDue : youngDue).push(loc);
-        } else if (mature) {
-            matureAnchors.push({ ...loc, interval: iv });
-        } else {
-            youngFiller.push(loc);
+            continue;
         }
+        // A semi mature card (past the anchor floor, short of maturity) is both
+        // group filler and anchor material. The two pools overlap for that
+        // band, so sampling filters anchors against cards the session has
+        // already used and shiftLocationsForDelta dedupes by card identity.
+        if (!mature) youngFiller.push(loc);
+        if (iv >= LEARN_ANCHOR_MIN_INTERVAL_DAYS) matureAnchors.push({ ...loc, interval: iv });
     }
 
     // Rank due pools by descending overdue ratio, tie-break by lowest ease.

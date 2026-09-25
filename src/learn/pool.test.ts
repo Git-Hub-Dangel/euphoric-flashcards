@@ -25,12 +25,31 @@ describe("classifyPools", () => {
         expect(pools.youngDue).toHaveLength(1);
     });
 
-    it("routes seen-non-due cards to matureAnchors (>=21d) or youngFiller (<21d)", () => {
+    it("routes seen-non-due cards to matureAnchors (>=21d) or youngFiller (<12d)", () => {
         const anchor = makeCard([sched("2026-02-15", 30), sched("2026-03-01", 45)]);
         const filler = makeCard([sched("2026-02-15", 5), sched("2026-03-01", 7)]);
         const pools = classifyPools([anchor, filler], today, mulberry32(1));
         expect(pools.matureAnchors).toHaveLength(1);
         expect(pools.matureAnchors[0]!.interval).toBe(30);
+        expect(pools.youngFiller).toHaveLength(1);
+        expect(pools.youngFiller[0]!.card.fields.word).toBe(filler.card.fields.word);
+    });
+
+    it("lists a semi-mature non-due card as both youngFiller and an anchor", () => {
+        const semi = makeCard([sched("2026-02-15", 12), sched("2026-03-01", 18)]);
+        const pools = classifyPools([semi], today, mulberry32(1));
+        expect(pools.youngFiller).toHaveLength(1);
+        expect(pools.matureAnchors).toHaveLength(1);
+        expect(pools.matureAnchors[0]!.interval).toBe(12);
+    });
+
+    it("keeps a non-due card under the anchor floor out of the anchor pool", () => {
+        const pools = classifyPools(
+            [makeCard([sched("2026-02-15", 11), sched("2026-03-01", 40)])],
+            today,
+            mulberry32(1),
+        );
+        expect(pools.matureAnchors).toHaveLength(0);
         expect(pools.youngFiller).toHaveLength(1);
     });
 
