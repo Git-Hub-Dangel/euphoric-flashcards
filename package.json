@@ -1,7 +1,7 @@
 {
     "name": "euphoric-flashcards",
-    "version": "1.4.0",
-    "description": "Spaced-repetition flashcard plugin for Obsidian with tag-based decks and Conjure Sentences mode.",
+    "version": "1.4.1",
+    "description": "Own your language, don't memorise it. A spaced-repetition system built exclusively for effective language learning.",
     "main": "main.js",
     "scripts": {
         "dev": "node esbuild.config.mjs",
@@ -12,7 +12,9 @@
     "keywords": [
         "obsidian",
         "flashcards",
-        "spaced-repetition"
+        "spaced-repetition",
+        "language",
+        "learning"
     ],
     "author": "Daniel Khansa",
     "license": "MIT",

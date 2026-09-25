@@ -1,10 +1,10 @@
 {
     "id": "euphoric-flashcards",
     "name": "Euphoric Flashcards",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "minAppVersion": "1.13.0",
-    "description": "Make flashcards enchanting. A minimal and engaging spaced-repetition system that trains you on applying, not only memorising your flashcards. Locally and offline.",
+    "description": "Own your language, don't memorise it. A spaced-repetition system built exclusively for effective language learning.",
     "author": "Daniel Khansa",
-    "authorUrl": "",
+    "authorUrl": "https://www.jrdk.de",
     "isDesktopOnly": false
 }
