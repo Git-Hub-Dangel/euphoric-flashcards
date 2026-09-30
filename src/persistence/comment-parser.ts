@@ -27,9 +27,11 @@ export function parseScheduleComment(comment: string): (ScheduleInfo | null)[] {
         .map(parseSegment);
 }
 
+// parseFloat, never parseInt: intervals are written with one decimal place
+// when load balancing is off, and parseInt truncates them on the way back in.
 function parseSegment(segment: string): ScheduleInfo | null {
     const [dueDateStr, intervalStr, easeStr] = segment.split(",");
-    return parseSM2Segment(dueDateStr ?? "", parseInt(intervalStr ?? "0"), parseInt(easeStr ?? "0"));
+    return parseSM2Segment(dueDateStr ?? "", parseFloat(intervalStr ?? "0"), parseFloat(easeStr ?? "0"));
 }
 
 function parseSM2Segment(

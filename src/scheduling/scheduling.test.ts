@@ -21,13 +21,9 @@ const emptyHistogram = new DueDateHistogram();
 // Equivalence tests — every expected value matches the upstream scheduling.test.ts
 // ---------------------------------------------------------------------------
 
+// The upstream "Easy" cases are gone with the easyBonus setting and the
+// ReviewResponse.Easy branch: no button in this plugin ever emitted Easy.
 describe("osrSchedule — upstream defaults, no delay", () => {
-    it("Easy: ease +20, interval = ceil((interval * ease/100) * easyBonus)", () => {
-        expect(
-            osrSchedule(ReviewResponse.Easy, 1, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, emptyHistogram),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase + 20, interval: 4 });
-    });
-
     it("Good: ease unchanged, interval = (interval * ease/100) rounded", () => {
         expect(
             osrSchedule(ReviewResponse.Good, 1, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, emptyHistogram),
@@ -43,12 +39,6 @@ describe("osrSchedule — upstream defaults, no delay", () => {
 
 describe("osrSchedule — upstream defaults, 2-day delay", () => {
     const delay = 2 * 24 * 3600 * 1000;
-
-    it("Easy with delay", () => {
-        expect(
-            osrSchedule(ReviewResponse.Easy, 10, UPSTREAM_DEFAULTS.baseEase, delay, UPSTREAM_DEFAULTS, emptyHistogram),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase + 20, interval: 42 });
-    });
 
     it("Good with delay", () => {
         expect(
@@ -179,7 +169,6 @@ describe("SRAlgorithmOsr — card scheduling", () => {
         expect(result.interval).toBe(1);
         expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
         expect(result.dueDate.format("YYYY-MM-DD")).toBe("2023-09-07");
-        expect(result.isDue()).toBe(false);
     });
 
     it("cardGetResetSchedule with existing schedule: applies lapsesIntervalChange", () => {

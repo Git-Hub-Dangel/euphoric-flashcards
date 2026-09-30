@@ -25,6 +25,25 @@ describe("parseScheduleComment — OSR single card", () => {
         const result = parseScheduleComment(comment);
         expect(result[0]).toBeNull();
     });
+
+    // Regression, P1.2. parseSegment used parseInt, which truncated the
+    // fractional intervals osrSchedule emits when load balancing is off
+    // (it rounds to one decimal place, not to a whole day). 2.5 read back as 2.
+    it("preserves a fractional interval instead of truncating it", () => {
+        const result = parseScheduleComment("<!--SR:!2023-09-10,2.5,247.5-->");
+        const info = result[0] as RepItemScheduleInfoOsr;
+        expect(info.interval).toBe(2.5);
+        expect(info.latestEase).toBe(247.5);
+    });
+
+    it("round-trips a fractional interval through write and read", () => {
+        const written = buildScheduleComment(
+            [RepItemScheduleInfoOsr.fromDueDateStr("2023-09-10", 12.3, 250, 0)],
+            DEFAULT_SETTINGS.baseEase,
+        );
+        const info = parseScheduleComment(written)[0] as RepItemScheduleInfoOsr;
+        expect(info.interval).toBe(12.3);
+    });
 });
 
 describe("parseScheduleComment — both-sided card (two segments)", () => {

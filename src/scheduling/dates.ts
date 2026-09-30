@@ -121,7 +121,3 @@ export let globalDateProvider: IDateProvider = new LiveDateProvider();
 export function setupStaticDateProvider(dateStr: string): void {
     globalDateProvider = StaticDateProvider.fromDateStr(dateStr);
 }
-
-export function setupStaticDateProvider20230906(): void {
-    setupStaticDateProvider("2023-09-06");
-}

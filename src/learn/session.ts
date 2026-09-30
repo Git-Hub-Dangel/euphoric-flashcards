@@ -84,7 +84,11 @@ export class LearnSession {
     // anchor pool still spreads across every sentence task.
     private readonly anchorAppearances = new Map<ParsedCard, number>();
     private readonly carried = new Set<ParsedCard>();
-    private readonly writtenFaces = new Set<string>();
+    // Keyed by ParsedCard identity, not by file path + startLine: a write to a
+    // card earlier in the same file shifts every later card's startLine via
+    // shiftLocationsForDelta, so a positional key moves out from under this set
+    // and the no-double-write gate fails open.
+    private readonly writtenFaces = new Map<ParsedCard, Set<0 | 1>>();
 
     private groupsCompleted = 0;
     private seqCounter = 0;
@@ -146,7 +150,7 @@ export class LearnSession {
     // Whether the modal must actually persist a schedule for this item.
     private shouldWrite(item: LearnItem): boolean {
         if (!item.writeEligible) return false;
-        return !this.writtenFaces.has(faceKey(item));
+        return !this.writtenFaces.get(item.card)?.has(item.faceIndex);
     }
 
     submitFaceAnswer(item: LearnItem, answer: FaceAnswer): FaceAnswerOutcome {
@@ -189,7 +193,12 @@ export class LearnSession {
     // Called by the modal after a successful vault write for the given item.
     // Marks the face as written so subsequent sessions the same day skip it.
     confirmWritten(item: LearnItem): void {
-        this.writtenFaces.add(faceKey(item));
+        let faces = this.writtenFaces.get(item.card);
+        if (faces === undefined) {
+            faces = new Set<0 | 1>();
+            this.writtenFaces.set(item.card, faces);
+        }
+        faces.add(item.faceIndex);
     }
 
     // Advance past the current sentence task (user pressed Continue).
@@ -379,8 +388,4 @@ export class LearnSession {
         counts.set(word.card, Math.max(0, prev + delta));
     }
 
-}
-
-function faceKey(item: LearnItem): string {
-    return `${item.filePath}|${item.card.startLine}|${item.faceIndex}`;
 }

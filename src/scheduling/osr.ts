@@ -32,10 +32,6 @@ export class RepItemScheduleInfoOsr {
     static readonly dummyDueDateForNewCard: string = DUMMY_DUE_DATE_FOR_NEW_CARD;
     static readonly initialInterval: number = 1.0;
 
-    isDue(): boolean {
-        return this.dueDate != null && this.dueDate.isSameOrBefore(globalDateProvider.now);
-    }
-
     get dueDateAsUnix(): number {
         return this.dueDate.valueOf();
     }
@@ -87,11 +83,11 @@ export function osrSchedule(
     const delayedBeforeReviewDays = Math.max(0, Math.floor(delayedBeforeReview / TICKS_PER_DAY));
     let interval: number = Math.max(1, originalInterval);
 
-    if (response === ReviewResponse.Easy) {
-        ease += 20;
-        interval = ((interval + delayedBeforeReviewDays) * ease) / 100;
-        interval *= settings.easyBonus;
-    } else if (response === ReviewResponse.Good) {
+    // No ReviewResponse.Easy branch: nothing in the plugin emits Easy. Review
+    // and Learn expose three buttons (Again / Okay / Good), and Cram's third
+    // button writes nothing at all. The enum member is retained only so the
+    // Easy=0 .. Again=3 ordering that worstOf relies on stays intact.
+    if (response === ReviewResponse.Good) {
         interval = ((interval + delayedBeforeReviewDays / 2) * ease) / 100;
     } else if (response === ReviewResponse.Hard) {
         ease = Math.max(130, ease - 20);

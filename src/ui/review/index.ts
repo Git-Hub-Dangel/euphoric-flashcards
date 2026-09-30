@@ -294,7 +294,9 @@ export class ReviewModal extends Modal {
     private renderCramButtons(actionsEl: HTMLElement, item: ReviewItem): void {
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
             () => this.handleAgain(item));
-        this.addResponseButton(actionsEl, 2, "Easy", "ef-btn-easy", "check", null,
+        // "Got it", not "Easy": Cram never writes a schedule (handleCramEasy),
+        // and "Easy" reads as a grade the card did not receive.
+        this.addResponseButton(actionsEl, 2, "Got it", "ef-btn-easy", "check", null,
             () => this.handleCramEasy());
     }
 

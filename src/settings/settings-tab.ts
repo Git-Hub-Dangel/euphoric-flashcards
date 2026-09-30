@@ -289,7 +289,6 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             const d = DEFAULT_SETTINGS;
                             const cur = this.plugin.data.settings;
                             cur.baseEase = d.baseEase;
-                            cur.easyBonus = d.easyBonus;
                             cur.defaultIntervalChange = d.defaultIntervalChange;
                             cur.lapsesIntervalChange = d.lapsesIntervalChange;
                             cur.maximumInterval = d.maximumInterval;
@@ -303,11 +302,6 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         name: "Base ease",
                         desc: "Default ease factor for new cards.",
                         control: { type: "slider", key: "baseEase", min: 100, max: 400, step: 10 },
-                    },
-                    {
-                        name: "Good bonus",
-                        desc: "Interval multiplier applied to cards reviewed as 'Good'",
-                        control: { type: "slider", key: "easyBonus", min: 1.0, max: 2.0, step: 0.05 },
                     },
                     {
                         name: "Okay interval change",

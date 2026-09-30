@@ -24,7 +24,6 @@ export interface EuphoricSettings {
 
     // Scheduling
     baseEase: number;
-    easyBonus: number;
     defaultIntervalChange: number;
     lapsesIntervalChange: number;
     loadBalance: boolean;
@@ -61,7 +60,6 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     rootDeckTags: [],
 
     baseEase: 250,
-    easyBonus: 1.3,
     defaultIntervalChange: 1.2,
     lapsesIntervalChange: 0.01,
     loadBalance: true,

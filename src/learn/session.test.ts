@@ -126,6 +126,46 @@ describe("LearnSession — write eligibility", () => {
             expect(outcome.writeIntent).toBeNull();
         }
     });
+
+    // Regression, P1.1. writtenFaces used to be keyed by
+    // `${filePath}|${card.startLine}|${faceIndex}`. Writing a card shifts the
+    // startLine of every card below it in the same file (shiftLocationsForDelta
+    // mutates ParsedCard.startLine in place), so the key of an already-written
+    // face moved and the gate failed open — the face could be written twice in
+    // one session. Keying on ParsedCard identity is immune to the shift.
+    it("the write gate survives a startLine shift on an already-written face", () => {
+        // Eight cards so the group cannot complete on a single answer; a
+        // completed group nulls out this.group and would pass vacuously.
+        const cards = newCards(8, "s");
+        const rng = mulberry32(3);
+        const pools = classifyPools(cards, TODAY, rng);
+        const session = new LearnSession(pools, {
+            groupLimit: 1,
+            wordCount: 1,
+            today: TODAY,
+            rng,
+        });
+        session.start();
+
+        const first = session.nextStep();
+        expect(first.kind).toBe("face");
+        if (first.kind !== "face") return;
+        const item = first.item;
+
+        const firstOutcome = session.submitFaceAnswer(item, "Good");
+        expect(firstOutcome.writeIntent).not.toBeNull();
+        session.confirmWritten(item);
+        expect(firstOutcome.groupCompleted).toBe(false);
+
+        // A write to a card above this one in the same file adds lines, and the
+        // line-delta machinery walks every later card's location forward.
+        item.card.startLine += 4;
+        item.card.endLine += 4;
+
+        // The same face, answered again after the shift, must not write again.
+        const secondOutcome = session.submitFaceAnswer(item, "Good");
+        expect(secondOutcome.writeIntent).toBeNull();
+    });
 });
 
 describe("LearnSession — carryover", () => {
