@@ -2,15 +2,16 @@ import { App, Modal, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
-import { SRAlgorithmOsr, textInterval } from "src/scheduling/osr";
+import { textInterval } from "src/scheduling/interval-text";
 import { withUpdatedSchedules, frontFace, backFace, cardReveal, parseCard } from "src/parsing";
 import type { ParsedCard, CardFace } from "src/parsing";
-import type { ScheduleInfo } from "src/persistence";
+import { ratingFor, scheduledDays } from "src/scheduling/fsrs";
+import type { GradeRecord, ScheduleInfo } from "src/scheduling/fsrs";
 import type { ReviewMode, CardSide } from "src/settings";
 import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
 import { isFaceDue } from "src/scheduling/due";
-import { previewInterval, applyResponse } from "src/scheduling/session-helpers";
+import { previewAll } from "src/scheduling/session-helpers";
 import { fisherYates } from "src/utils/shuffle";
 import { loadCardsForDeck, writeCardBack, ReviewCard } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
@@ -86,6 +87,11 @@ export class ReviewModal extends Modal {
     private fileCache = new Map<string, string>();
     private keymapHandlers: KeymapEventHandler[] = [];
     private againItems = new Set<ReviewItem>();
+    // Every outcome for the face currently on screen, taken in one FSRS call when
+    // the answer is revealed. Buttons render their previews from this record and
+    // the write uses the very same entry, so the interval shown and the interval
+    // stored cannot disagree (plan P3.5).
+    private pendingPreview: GradeRecord<ScheduleInfo> | null = null;
     // True until the first card has been rendered — used to stagger the
     // header and action row exactly once on modal open, matching how
     // Conjure Sentences animates its permanent chrome.
@@ -155,7 +161,7 @@ export class ReviewModal extends Modal {
         const cards = await loadCardsForDeck(this.app.vault, this.node, rootTags);
         this.queue = buildReviewQueue(
             cards, this.mode, this.cardSide,
-            globalDateProvider.today.toDate(),
+            globalDateProvider.today,
         );
         this.totalCards = this.queue.length;
         this.contentEl.empty();
@@ -176,6 +182,10 @@ export class ReviewModal extends Modal {
         this.clearKeymap();
         this.contentEl.empty();
         this.revealed = false;
+        // A new face invalidates the previous face's preview. The `revealed`
+        // guard already prevents a write from reaching a stale snapshot; this
+        // makes the invalidation explicit rather than a consequence of it.
+        this.pendingPreview = null;
 
         const item = this.queue[this.idx]!;
         const face: CardFace = item.faceIndex === 0 ? frontFace(item.card) : backFace(item.card);
@@ -265,30 +275,54 @@ export class ReviewModal extends Modal {
         }
     }
 
+    // One snapshot per revealed face, shared by the previews and the write.
+    private snapshotPreview(schedule: ScheduleInfo | null): GradeRecord<ScheduleInfo> {
+        const preview = previewAll(schedule, this.plugin, globalDateProvider.now);
+        this.pendingPreview = preview;
+        return preview;
+    }
+
+    private previewLabel(
+        preview: GradeRecord<ScheduleInfo>,
+        response: ReviewResponse,
+    ): string | null {
+        if (!this.plugin.data.settings.showIntervalOnButtons) return null;
+        return textInterval(scheduledDays(preview[ratingFor(response)]), true);
+    }
+
     private renderReviewButtons(
         actionsEl: HTMLElement,
         item: ReviewItem,
         schedule: ScheduleInfo | null,
     ): void {
-        const showInterval = this.plugin.data.settings.showIntervalOnButtons;
-        const okayInterval = showInterval ? textInterval(previewInterval(schedule, ReviewResponse.Hard, this.plugin), true) : null;
-        const goodInterval = showInterval ? textInterval(previewInterval(schedule, ReviewResponse.Good, this.plugin), true) : null;
+        const preview = this.snapshotPreview(schedule);
 
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
             () => this.handleAgain(item));
-        this.addResponseButton(actionsEl, 2, "Okay", "ef-btn-okay", "activity", okayInterval,
+        this.addResponseButton(actionsEl, 2, "Okay", "ef-btn-okay", "activity",
+            this.previewLabel(preview, ReviewResponse.Hard),
             () => { void this.handleScheduledResponse(ReviewResponse.Hard, item); });
-        this.addResponseButton(actionsEl, 3, "Good", "ef-btn-good", "check", goodInterval,
+        this.addResponseButton(actionsEl, 3, "Good", "ef-btn-good", "check",
+            this.previewLabel(preview, ReviewResponse.Good),
             () => { void this.handleScheduledResponse(ReviewResponse.Good, item); });
     }
 
+    // The post-Again re-drill. B2 deletes this surface outright in P4.6, at which
+    // point Again writes immediately and the re-drill writes nothing. Until then
+    // it keeps its shape, but its write now goes through FSRS as a genuine
+    // Rating.Again — lapse severity comes from the algorithm's stability floor
+    // rather than the old lapsesIntervalChange collapse to one day. The preview
+    // is the real Again interval for the same reason; the hardcoded "1d" it used
+    // to show became a lie the moment FSRS took over.
     private renderPostAgainButtons(actionsEl: HTMLElement, item: ReviewItem): void {
-        const showInterval = this.plugin.data.settings.showIntervalOnButtons;
+        const schedule = item.card.schedules[item.faceIndex];
+        const preview = this.snapshotPreview(schedule);
 
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
             () => this.handleAgain(item));
-        this.addResponseButton(actionsEl, 2, "OK", "ef-btn-good", "check", showInterval ? "1d" : null,
-            () => { void this.handleReset(item); });
+        this.addResponseButton(actionsEl, 2, "OK", "ef-btn-good", "check",
+            this.previewLabel(preview, ReviewResponse.Again),
+            () => { void this.handleScheduledResponse(ReviewResponse.Again, item); });
     }
 
     private renderCramButtons(actionsEl: HTMLElement, item: ReviewItem): void {
@@ -340,21 +374,14 @@ export class ReviewModal extends Modal {
         if (!this.revealed) return;
         this.revealed = false;
 
-        const newSchedule = applyResponse(item.card.schedules[item.faceIndex], response, this.plugin);
-        await this.writeSchedule(item, newSchedule);
-
-        this.reviewed++;
-        this.idx++;
-        this.idx >= this.queue.length ? this.renderDone() : this.renderCard();
-    }
-
-    private async handleReset(item: ReviewItem): Promise<void> {
-        if (!this.revealed) return;
-        this.revealed = false;
-
-        const algo = new SRAlgorithmOsr(this.plugin.data.settings);
-        const newSchedule = algo.cardGetResetSchedule(item.card.schedules[item.faceIndex]);
-        await this.writeSchedule(item, newSchedule);
+        // Written from the snapshot the buttons were rendered from, falling back
+        // to a fresh computation only if no preview was taken (Cram never renders
+        // scheduled responses, so in practice the snapshot is always present).
+        const preview = this.pendingPreview ?? previewAll(
+            item.card.schedules[item.faceIndex], this.plugin, globalDateProvider.now,
+        );
+        this.pendingPreview = null;
+        await this.writeSchedule(item, preview[ratingFor(response)]);
 
         this.reviewed++;
         this.idx++;
@@ -404,7 +431,7 @@ export class ReviewModal extends Modal {
 
                 // Reattach the existing SR schedule (if any) on its own last line.
                 const finalLines = hadSchedule
-                    ? withUpdatedSchedules(parsed, item.card.schedules, this.plugin.data.settings.baseEase)
+                    ? withUpdatedSchedules(parsed, item.card.schedules)
                     : editedLines;
 
                 const oldLength = item.card.rawLines.length;

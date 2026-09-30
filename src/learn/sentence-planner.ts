@@ -131,7 +131,7 @@ export function pickSentenceWords(opts: {
 
     if (anchorSlot === 1) {
         const anchorWeights = anchors.map(a =>
-            anchorWeight(a.interval, anchorCounts?.get(a.card) ?? 0, rng),
+            anchorWeight(a.stability, anchorCounts?.get(a.card) ?? 0, rng),
         );
         const [pickIdx] = weightedSampleWithoutReplacement(anchorWeights, 1, rng);
         if (pickIdx !== undefined) {

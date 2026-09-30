@@ -10,6 +10,8 @@ import type { Card, FSRS, FSRSParameters, Grade } from "ts-fsrs";
 
 import { REQUEST_RETENTION_MAX, REQUEST_RETENTION_MIN } from "src/settings";
 import type { EuphoricSettings } from "src/settings";
+import { TICKS_PER_DAY } from "src/scheduling/constants";
+import { ReviewResponse } from "src/scheduling/review-response";
 
 // The single boundary between this plugin and ts-fsrs. Nothing else in src/ may
 // import "ts-fsrs" — enforced by a grep in the FSRS plan's Phase 7 scan. Keeping
@@ -123,4 +125,101 @@ export class FsrsEngine {
     retrievability(card: Card, now: Date): number {
         return this.f.get_retrievability(card, now, false);
     }
+}
+
+// --- The persisted card state (FSRS plan §B4) -------------------------------
+//
+// One face of one card. This replaces SM-2's RepItemScheduleInfoOsr; `interval`
+// and `latestEase` are gone, and `Moment` has left the scheduling core.
+//
+// Deliberately NOT a ts-fsrs `Card`. Two fields of `Card` are derived state that
+// B4 requires be recomputed at load rather than stored:
+//
+//   - elapsed_days   days since last_review
+//   - scheduled_days days from last_review to due
+//
+// Storing them would let the file disagree with the clock. Both are recomputed
+// in toCard() below, and ts-fsrs ignores the incoming values anyway: both
+// AbstractScheduler.init() and get_retrievability() measure from `last_review`
+// directly (verified in 5.4.2, dist/index.mjs:362-369 and :1662).
+//
+// `learning_steps` is likewise absent: under B1's enable_short_term: false it is
+// always 0, so there is nothing to persist.
+//
+// On last_review's type: ts-fsrs models "never reviewed" as `undefined`
+// (optional property); B4 specifies `null`. We keep `null` — it survives JSON,
+// it cannot be produced by a typo'd property name, and it makes the "new face"
+// case explicit at every read site. The two converters are the only places the
+// two spellings meet.
+export interface ScheduleInfo {
+    due: Date;
+    stability: number;
+    difficulty: number;
+    reps: number;
+    lapses: number;
+    state: State;
+    last_review: Date | null;
+}
+
+// Whole days between two instants, floored, matching ts-fsrs's own date_diff.
+// Floored rather than rounded so "same day" is 0 and a card is never credited
+// with elapsed time it has not had.
+export function diffInDays(from: Date, to: Date): number {
+    return Math.floor((to.valueOf() - from.valueOf()) / TICKS_PER_DAY);
+}
+
+// The interval a schedule represents: last_review → due, in whole days. This is
+// the quantity ts-fsrs calls scheduled_days, recomputed rather than stored. It
+// is what the button previews render through textInterval.
+export function scheduledDays(s: ScheduleInfo): number {
+    if (s.last_review === null) return 0;
+    return Math.max(0, diffInDays(s.last_review, s.due));
+}
+
+// ScheduleInfo → the shape ts-fsrs wants, with the two derived fields restored.
+export function toCard(s: ScheduleInfo, now: Date): Card {
+    const lastReview = s.last_review;
+    return {
+        due: s.due,
+        stability: s.stability,
+        difficulty: s.difficulty,
+        elapsed_days: lastReview === null ? 0 : Math.max(0, diffInDays(lastReview, now)),
+        scheduled_days: scheduledDays(s),
+        learning_steps: 0,
+        reps: s.reps,
+        lapses: s.lapses,
+        state: s.state,
+        ...(lastReview === null ? {} : { last_review: lastReview }),
+    };
+}
+
+// ts-fsrs → our persisted shape, dropping the derived fields.
+export function toScheduleInfo(c: Card): ScheduleInfo {
+    return {
+        due: c.due,
+        stability: c.stability,
+        difficulty: c.difficulty,
+        reps: c.reps,
+        lapses: c.lapses,
+        state: c.state,
+        last_review: c.last_review ?? null,
+    };
+}
+
+// --- Rating translation (FSRS plan §C3) ------------------------------------
+//
+// ReviewResponse is Easy=0, Good=1, Hard=2, Again=3. FSRS Rating is Again=1,
+// Hard=2, Good=3, Easy=4 — the reverse order, except that Hard is 2 in both.
+// That single coincidence is what makes a naive cast so dangerous: three of the
+// four values invert while the one a spot-check is most likely to land on keeps
+// working. This table is exhaustive and explicitly tested; never inline a cast.
+const RATING_FOR_RESPONSE: Record<ReviewResponse, Grade> = {
+    [ReviewResponse.Easy]: Rating.Easy,
+    [ReviewResponse.Good]: Rating.Good,
+    [ReviewResponse.Hard]: Rating.Hard,
+    [ReviewResponse.Again]: Rating.Again,
+};
+
+export function ratingFor(response: ReviewResponse): Grade {
+    return RATING_FOR_RESPONSE[response];
 }

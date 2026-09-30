@@ -2,8 +2,9 @@ import type { Vault } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { ParsedCard } from "src/parsing";
 import { withUpdatedSchedules } from "src/parsing";
-import type { ScheduleInfo } from "src/persistence";
+import type { ScheduleInfo } from "src/scheduling/fsrs";
 import { PREFERRED_DATE_FORMAT } from "src/scheduling/constants";
+import { formatDate } from "src/scheduling/dates";
 import { writeCardBack } from "src/ui/review/load-cards";
 
 export interface GradedFace {
@@ -32,14 +33,16 @@ export async function writeGradedResponse(opts: {
     ];
     updatedSchedules[item.faceIndex] = newSchedule;
 
-    const newLines = withUpdatedSchedules(item.card, updatedSchedules, plugin.data.settings.baseEase);
+    const newLines = withUpdatedSchedules(item.card, updatedSchedules);
     const oldLength = item.card.rawLines.length;
     await writeCardBack(vault, fileCache, item.filePath, item.card, newLines);
 
     if (plugin.data.settings.loadBalance) {
         const store = plugin.histogramStore;
-        if (oldSchedule !== null) store.decrement(oldSchedule.dueDate.format(PREFERRED_DATE_FORMAT));
-        store.increment(newSchedule.dueDate.format(PREFERRED_DATE_FORMAT));
+        if (oldSchedule !== null) {
+            store.decrement(formatDate(oldSchedule.due.valueOf(), PREFERRED_DATE_FORMAT));
+        }
+        store.increment(formatDate(newSchedule.due.valueOf(), PREFERRED_DATE_FORMAT));
         void plugin.saveData_();
     }
 

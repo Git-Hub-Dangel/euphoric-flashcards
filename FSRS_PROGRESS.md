@@ -2,15 +2,19 @@
 
 Companion to `FSRS_IMPLEMENTATION_PLAN.md`. That file holds the work to do; this one records what is done, what was learned doing it, and what the next agent must not re-derive. The plan still wins on intent; this file wins on current state.
 
-**Status: Phases 1–2 complete. Phase 3 is next.**
+**Status: Phases 1–3 complete. Phase 4 is next.**
 
-| | Baseline | After P1 | After P2 |
-|---|---|---|---|
-| Tests | 170 / 11 files | 183 / 12 | **237 / 13** |
-| `tsc --noEmit --skipLibCheck` | clean | clean | clean |
-| `npm run build` | clean | clean | clean |
-| `main.js` | 125,913 B | 126,681 B | **128,473 B** |
-| `dataVersion` | — | 2 | **3** |
+| | Baseline | After P1 | After P2 | After P3 |
+|---|---|---|---|---|
+| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | **284 / 14** |
+| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean |
+| `npm run build` | clean | clean | clean | clean |
+| `main.js` | 125,913 B | 126,681 B | 128,473 B | **191,203 B** |
+| `dataVersion` | — | 2 | 3 | **3** (unchanged) |
+
+The `main.js` jump of **+62,730 B** is ts-fsrs entering the bundle for the first
+time, and it lands within 2 KB of the 60,929 B the Phase 2 probe predicted. Phase
+2's tree-shaking is over: the engine is wired.
 
 ---
 
@@ -44,7 +48,7 @@ The P1.1 regression test was proven to catch the bug: reverting to the positiona
 
 ## PHASE 2 — Dependency and scheduling engine ✅
 
-Uncommitted at time of writing.
+Committed as `b417a50`.
 
 - **P2.1** `ts-fsrs` installed as the first runtime `dependency`, **pinned exactly to `5.4.2`** (no caret). Not in esbuild's externals.
 - **P2.2** reference clone confirmed isolated — see *The reference clone* below.
@@ -112,8 +116,22 @@ Verified:
 
 Added to `FSRS_IMPLEMENTATION_PLAN.md`:
 
-- **P3.10** — reword the `maximumInterval` setting description when FSRS takes over scheduling (finding 1).
+- **P3.10** — reword the `maximumInterval` setting description when FSRS takes over scheduling (finding 1). ✅ done in Phase 3.
 - **P4.2b** — assert New faces never enter the retrievability ranking (finding 2), plus the flooring note (finding 3).
+
+Phase 3 additions:
+
+- **P4.0 (new, Phase 4's first task)** — delete `baseEase`, `defaultIntervalChange`
+  and `lapsesIntervalChange`: the three `PluginData` keys, their three settings
+  rows, and their three lines in "Restore Default Settings", via a v3→v4 migration
+  step. All three have had zero consumers since `osr.ts` was deleted. B2 only names
+  `lapsesIntervalChange`; the other two fell out of the same deletion.
+- **P7.3 amendment** — the grep for surviving SM-2 concepts will also hit prose in
+  comments that deliberately explain what was replaced (`fsrs.ts`'s ScheduleInfo
+  note, both modals' reset-path notes). Those are documentation, not residue.
+- **P5.3 note** — the converter's legacy parser can use `parseLegacyDate` from
+  `src/scheduling/dates.ts`, which already handles all three
+  `ALLOWED_DATE_FORMATS` shapes without `moment`. It was kept for exactly this.
 
 ---
 
@@ -127,12 +145,188 @@ Corrected in P1.7 and kept current through Phase 2. Version was already `1.4.1`,
 
 Still outstanding, by design: **§0 and §10 both still say FSRS was rejected.** That is P7.9's job, not Phase 1's.
 
+### Newly stale after Phase 3 — all for P7.9
+
+Phase 3 changed enough of the architecture that these EF.md passages are now
+actively wrong rather than merely incomplete. Listed so P7.9 does not have to
+rediscover them:
+
+- **The data model.** Anything describing `interval` + `ease`, `RepItemScheduleInfoOsr`,
+  or the three-field SR comment. The format is seven fields and documented at the
+  top of `comment-parser.ts`.
+- **§2's module list.** `src/scheduling/osr.ts` is gone; `interval-text.ts`,
+  `session-helpers.test.ts` and `src/scheduling/fsrs.ts`'s expanded role are new.
+  `ScheduleInfo` moved from `src/persistence` to `src/scheduling/fsrs`.
+- **Invariant 19** retires as planned (it concerns SM-2 ease).
+- **Any claim that `moment` is used.** It is out of `src/` entirely; `dates.ts` no
+  longer imports `obsidian` either.
+- **The settings-tab inventory.** The `maximumInterval` description changed (P3.10),
+  and three Scheduling rows are slated for deletion in P4.0.
+- **New invariants earned in Phase 3:** `ScheduleInfo` is the only card-state type
+  and it lives beside its converters; `elapsed_days` and `scheduled_days` are never
+  persisted; both stored dates are calendar dates, so FSRS measures elapsed time in
+  whole calendar days; a preview and the write it leads to come from one snapshot.
+
 ---
 
-## Next: PHASE 3 — Data model and persistence
+## PHASE 3 — Data model and persistence ✅
 
-Preconditions met. The largest phase: redefining `ScheduleInfo` makes `tsc` enumerate every consumer.
+Uncommitted at time of writing. The largest phase, as predicted: redefining
+`ScheduleInfo` made `tsc` enumerate 15 consumer files, and every one of them was a
+real consumer.
 
-Start with **P3.1** — rewrite `src/learn/test-helpers.ts`'s `sched()` *first*. Every Learn fixture flows through it, so a good FSRS replacement turns ~29 mechanical updates into a one-file change.
+- **P3.1** `sched()` rewritten first, before any fixture. New signature
+  `sched(dueStr, stability, opts?)` with `opts: {difficulty, reps, lapses, lastReview, state}`.
+  Only 4 of the 29 call sites needed more than the positional `interval → stability`
+  reinterpretation — the four that spoke *ease*.
+- **P3.2** `ScheduleInfo` redefined as FSRS card state and **moved to
+  `src/scheduling/fsrs.ts`**, beside the converters. `src/persistence` no longer
+  re-exports it (see decisions).
+- **P3.3** `comment-parser.ts` rewritten to the seven-field B4 format, `parseFloat`
+  throughout, `elapsed_days` / `scheduled_days` recomputed at load.
+- **P3.4** `due.ts` rewritten to two lines, comparing against `now`.
+- **P3.5** `previewInterval` → `previewAll`, plus `applyResponse` and
+  `retrievabilityOf`. Both modals now take **one snapshot per revealed face** and
+  write the entry they rendered.
+- **P3.6** `osr.ts` deleted. `textInterval` moved to new `src/scheduling/interval-text.ts`.
+- **P3.7** Fallout fixed across `card-parser.ts`, `write-schedule.ts`,
+  `histogram-store.ts`, `deck-tree.ts`. `withUpdatedSchedules`' and
+  `buildScheduleComment`'s `baseEase` parameters removed.
+- **P3.8** `dates.ts` rewritten: native `Date`, **no `moment`, no `obsidian` import**.
+- **P3.9** `comment-parser.test.ts` and `scheduling.test.ts` rewritten;
+  `card-parser.test.ts`, `pool.test.ts`, `sentence-planner.test.ts` and
+  `decks.test.ts` re-fixtured. New `session-helpers.test.ts`. The `deck-tree`
+  due/new regression suite from §C3 added.
+- **P3.10** `maximumInterval` description reworded for the soft ceiling.
 
-Two shapes to carry in: ts-fsrs `Card.last_review` is **optional** (`Date | undefined`), whereas B4 specifies `Date | null` — reconcile deliberately in P3.2. And `Card.learning_steps` exists on the type but is always `0` under B1 and is not persisted (B4).
+### Decisions taken in Phase 3
+
+- **`ScheduleInfo` lives in `src/scheduling/fsrs.ts`, not `src/persistence`.** It is
+  FSRS card state, and it belongs beside the two converters that are the only code
+  allowed to know both spellings. `src/persistence/index.ts` deliberately no longer
+  re-exports the type, so there is exactly one source of truth; the nine importers
+  were updated rather than left pointing at a barrel that no longer owns it.
+- **`last_review` is `Date | null`, per B4, not ts-fsrs's `Date | undefined`.** It
+  survives JSON, cannot be produced by a mistyped property name, and makes the
+  "never reviewed" case explicit at every read site. `toCard` omits the property
+  entirely when null (ts-fsrs checks truthiness) and `toScheduleInfo` maps
+  `undefined → null`. Those two functions are the only place the spellings meet.
+- **Both dates are stored as calendar dates (`YYYY-MM-DD`), not instants.** B1 makes
+  scheduling day-granular, so a time component has nothing to contribute and would
+  only make the comments unreadable. This has a *good* consequence worth knowing:
+  because `last_review` reads back as local midnight, FSRS measures elapsed time in
+  whole **calendar** days, so the retrievability ties of finding 3 now fall on day
+  boundaries instead of straddling midnight. The truncation is explicitly tested.
+- **Floats are written at 4 dp.** ts-fsrs carries stability and difficulty at 8
+  (`roundTo(x, 8)`). Four keeps the comment readable in the user's own note while
+  costing 8.6 seconds of stability and a thousandth of a difficulty point — far
+  below day granularity, and double the ≥2 dp the exit criterion demands. Tested
+  for drift across five write/read cycles.
+- **A New face still emits a placeholder segment**, `!2000-01-01,0,0,0,0,0,`. The
+  dummy date is what marks it New on the way back in, and emitting it rather than
+  omitting it is what keeps front = 0 / back = 1 positional when only the back has
+  been reviewed.
+- **The parser rejects any segment with fewer than seven fields.** A legacy SM-2
+  comment therefore reads as `null` — *not* as a new card. This is the correct
+  pre-converter state and is asserted, but see the warning below.
+- **`reset` (the post-Again OK) now writes `Rating.Again`.** `cardGetResetSchedule`
+  died with `osr.ts`, and `lapsesIntervalChange` has no FSRS equivalent. B2 already
+  specifies that lapse severity comes from FSRS's stability floor, so routing the
+  intent through the seam as a genuine `Again` is the honest stopgap. P4.5 deletes
+  the intent kind outright. The hardcoded `"1d"` preview went with it — it became a
+  lie the moment FSRS owned scheduling, so both re-drill buttons now show the real
+  Again interval.
+- **`pool.ts` was ported mechanically, with one exception.** Thresholds
+  (`>= 21` / `>= 12`) and the overdue-ratio ranking keep their Phase 3 shape for
+  P4.1/P4.2 to replace. The exception is the **tie-break sign**: leaving a
+  wrongly-signed `minSeenEase`-shaped function over `difficulty` would have been
+  precisely the §C3 landmine, invisible to every other test. So the tie-break and
+  `youngFiller` order flipped to `difficulty` **descending** now, with three
+  explicit ordering tests including one that pins the min-vs-max-across-faces
+  asymmetry.
+- **`AnchorLocation.interval` renamed to `.stability`.** A field named `interval`
+  holding a stability value is the kind of mislabel that survives for years. P4.3
+  now only has to change the weighting maths, not the name.
+- **A temporary `Math.max(1, stability)` floor in `overdueRatio`.** FSRS stability
+  can sit below 1 day for a badly lapsed card where SM-2's interval could not, and
+  an unfloored divisor lets one such face swamp the ranking. Dies with the function
+  in P4.2.
+
+### ⚠️ Debt deliberately left for Phase 4
+
+**Load balancing applies no jitter right now.** The histogram's
+increment / decrement / rebuild bookkeeping is fully correct and no counts are
+lost, but nothing consults it when scheduling, because re-pointing
+`findLeastUsedIntervalOverRange` at the returned `due: Date` is P5.1. `histogramFor`
+is still exported and tested; it simply has no caller inside the scheduling path
+yet. `enable_fuzz` remains `false`, so the histogram is still the only place jitter
+will ever come from.
+
+**Three settings keys now have zero consumers:** `baseEase`,
+`defaultIntervalChange` and `lapsesIntervalChange`. Their sliders still render in
+the Scheduling group and do **nothing**. They were left in place because deleting
+`PluginData` keys requires a migration (EF.md invariant 11) and B2 already assigns
+`lapsesIntervalChange`'s deletion to Phase 4 — all three should go together in one
+v3→v4 step, with their three settings rows and the three lines in "Restore Default
+Settings". Nothing user-facing ships before then: the plan has P3 and P4 landing in
+the same release.
+
+**Existing vaults read as un-scheduled until the converter exists.** A pre-FSRS
+comment now parses to `null` on both faces. Deck Total still counts those cards,
+but Due and New both show 0 for them, so a 1.4.1 vault opened on this build looks
+like a deck of cards that are neither new nor due. That is Phase 5's entire reason
+to exist, and it is asserted in `decks.test.ts` so it cannot be mistaken for a
+regression — but **do not ship Phase 3 or 4 to a user without Phase 5**.
+
+### Findings from Phase 3
+
+**6. `withUpdatedSchedules` had a latent preview/write disagreement, now closed.**
+The old `previewInterval` and `applyResponse` each constructed their own
+`SRAlgorithmOsr` and re-snapshotted the histogram, so a button could advertise one
+interval and write another. `previewAll` takes a single `repeat()` and both modals
+now render from and write to that one record. `session-helpers.test.ts` asserts the
+two paths agree field-by-field for all four grades.
+
+**7. The comment is now ~2.1× longer.** A two-face comment went from 44 characters
+(`<!--SR:!2026-09-20,4,270!2026-09-25,6,250-->`) to 94
+(`<!--SR:!2026-11-01,23.9931,2.1112,2,0,2,2026-10-08!2026-10-01,0.212,6.4133,1,0,2,2026-09-30-->`).
+Unavoidable at seven fields, and it stays on the card's single last line, but it is
+worth a word in the release notes since users see these comments in their notes.
+
+**8. `moment` is gone from `src/` entirely** — not just from the scheduling core.
+`dates.ts` was the last consumer and no longer imports `obsidian` either. `moment`
+remains a devDependency because `tests/obsidian-stub.ts` still re-exports it; the
+stub is now vestigial for the current test graph but harmless, and it is what any
+future UI test would need.
+
+**9. The SM-2 arithmetic tests' load-balancing cases had no direct coverage.** They
+exercised `findLeastUsedIntervalOverRange` only through `osrSchedule`. They are now
+five direct tests of the scan itself, which is the part that survives untouched
+into P5.1 — including the two behaviours easiest to get wrong when re-pointing it:
+earlier-day-wins on a tie, and *keeping the requested day* when nothing in the
+window is strictly better.
+
+---
+
+## Next: PHASE 4 — Behaviour: Learn engine, rating contract, UI
+
+Preconditions met. Read the **Debt** section above first: three of its items are
+Phase 4's opening moves.
+
+The groundwork Phase 3 laid that P4 should build on rather than redo:
+
+- `previewAll` already returns all four grades from one call, so **P4.7 is mostly
+  done** — what remains is B2's rule that a preview renders *iff* a write will
+  occur, which means the re-drill's three buttons show none.
+- `ratingFor` already exists and is exhaustively tested, so **P4.4**'s job is to
+  decide whether `ReviewResponse` survives at all, not to build the mapping.
+- The `difficulty`-descending tie-break and its sign tests already landed, so
+  **P4.2** is the retrievability ranking plus P4.2b's New-face assertion.
+- `pool.ts` still holds `minSeenStability` / `maxSeenDifficulty` / `overdueRatio`
+  and the `>= 21` / `>= 12` thresholds against `LEARN_MATURE_INTERVAL_DAYS` and
+  `LEARN_ANCHOR_MIN_INTERVAL_DAYS`, which **P4.1/P4.3 should rename** now that they
+  measure stability.
+
+Do not forget finding 4 when writing the P4 exit criterion: **`Again` on a
+`State.New` card gives `lapses: 0`**. Only a `State.Review` card increments, and
+`session-helpers.test.ts` now pins both halves of that.

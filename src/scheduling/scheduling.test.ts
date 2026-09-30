@@ -1,117 +1,30 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS, EuphoricSettings } from "src/settings";
 import { DueDateHistogram } from "src/scheduling/due-date-histogram";
-import { osrSchedule, textInterval, RepItemScheduleInfoOsr, SRAlgorithmOsr } from "src/scheduling/osr";
-import { ReviewResponse } from "src/scheduling/review-response";
-import { setupStaticDateProvider } from "src/scheduling/dates";
+import { textInterval } from "src/scheduling/interval-text";
+import {
+    formatDate,
+    LiveDateProvider,
+    parseLegacyDate,
+    parsePreferredDate,
+    setupStaticDateProvider,
+    startOfDay,
+    StaticDateProvider,
+    globalDateProvider,
+} from "src/scheduling/dates";
 
-// Settings that exactly match the upstream plugin's DEFAULT_SETTINGS, used to
-// pin numeric outputs against the upstream test suite as equivalence proof.
-const UPSTREAM_DEFAULTS: EuphoricSettings = {
-    ...DEFAULT_SETTINGS,
-    defaultIntervalChange: 0.5, // upstream used this value for Hard (was lapsesIntervalChange)
-    lapsesIntervalChange: 0.5,  // upstream default; fork default is 0.01
-    maximumInterval: 36525,     // upstream default; fork default is 365
-};
-
-const emptyHistogram = new DueDateHistogram();
-
-// ---------------------------------------------------------------------------
-// Equivalence tests — every expected value matches the upstream scheduling.test.ts
-// ---------------------------------------------------------------------------
-
-// The upstream "Easy" cases are gone with the easyBonus setting and the
-// ReviewResponse.Easy branch: no button in this plugin ever emitted Easy.
-describe("osrSchedule — upstream defaults, no delay", () => {
-    it("Good: ease unchanged, interval = (interval * ease/100) rounded", () => {
-        expect(
-            osrSchedule(ReviewResponse.Good, 1, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, emptyHistogram),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 3 });
-    });
-
-    it("Hard: ease -20, interval = max(1, interval * lapsesIntervalChange)", () => {
-        expect(
-            osrSchedule(ReviewResponse.Hard, 1, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, emptyHistogram),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase - 20, interval: 1 });
-    });
-});
-
-describe("osrSchedule — upstream defaults, 2-day delay", () => {
-    const delay = 2 * 24 * 3600 * 1000;
-
-    it("Good with delay", () => {
-        expect(
-            osrSchedule(ReviewResponse.Good, 10, UPSTREAM_DEFAULTS.baseEase, delay, UPSTREAM_DEFAULTS, emptyHistogram),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 28 });
-    });
-
-    it("Hard with delay: (interval + delay/4) * lapsesIntervalChange", () => {
-        expect(
-            osrSchedule(ReviewResponse.Hard, 10, UPSTREAM_DEFAULTS.baseEase, delay, UPSTREAM_DEFAULTS, emptyHistogram),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase - 20, interval: 5 });
-    });
-});
-
-describe("osrSchedule — Again response", () => {
-    it("Again: interval → 0, ease -20", () => {
-        const result = osrSchedule(ReviewResponse.Again, 10, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, emptyHistogram);
-        expect(result.interval).toBe(0);
-        expect(result.ease).toBe(UPSTREAM_DEFAULTS.baseEase - 20);
-    });
-
-    it("Again does not drop ease below 130", () => {
-        const result = osrSchedule(ReviewResponse.Again, 5, 140, 0, UPSTREAM_DEFAULTS, emptyHistogram);
-        expect(result.ease).toBe(130);
-    });
-});
-
-describe("osrSchedule — load balancing (small interval, disabled)", () => {
-    it("interval <= 7: no fuzzing applied, returns raw calculated interval", () => {
-        const dueDates = new DueDateHistogram({ 0: 1, 1: 1, 2: 1, 3: 4 });
-        expect(
-            osrSchedule(ReviewResponse.Good, 1, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, dueDates),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 3 });
-    });
-});
-
-describe("osrSchedule — load balancing (interval > 7)", () => {
-    it("7 < interval <= 21: fuzz = 1", () => {
-        const dueDates = new DueDateHistogram({ 17: 4, 18: 5, 19: 3 });
-        expect(
-            osrSchedule(ReviewResponse.Good, 7, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, dueDates),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 19 });
-    });
-
-    it("21 < interval <= 180: fuzz = floor(interval * 0.05) capped at 3", () => {
-        const dueDates = new DueDateHistogram({ 23: 5, 26: 1 });
-        expect(
-            osrSchedule(ReviewResponse.Good, 10, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, dueDates),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 25 });
-    });
-
-    it("picks least-used slot in window", () => {
-        const dueDates = new DueDateHistogram({
-            2: 5, 59: 8, 60: 9, 61: 3, 62: 5, 63: 4, 64: 4, 65: 8, 66: 2, 67: 10,
-        });
-        expect(
-            osrSchedule(ReviewResponse.Good, 25, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, dueDates),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 66 });
-    });
-
-    it("interval > 180: fuzz = floor(interval * 0.025) capped at 7", () => {
-        const dueDates = new DueDateHistogram({
-            1245: 7, 1246: 4, 1247: 2, 1248: 9, 1249: 5,
-            1250: 4, 1251: 1, 1252: 1, 1254: 1,
-        });
-        expect(
-            osrSchedule(ReviewResponse.Good, 500, UPSTREAM_DEFAULTS.baseEase, 0, UPSTREAM_DEFAULTS, dueDates),
-        ).toEqual({ ease: UPSTREAM_DEFAULTS.baseEase, interval: 1253 });
-    });
-});
+// The SM-2 arithmetic suites that used to live here are gone with osr.ts
+// (FSRS plan P3.6): osrSchedule, SRAlgorithmOsr's card-level methods, and
+// RepItemScheduleInfoOsr's comment formatting. Their FSRS replacements are
+// tested in fsrs.test.ts (the engine) and comment-parser.test.ts (the format).
+//
+// The load-balancing cases that exercised osrSchedule's fuzz branch are now
+// direct tests of DueDateHistogram.findLeastUsedIntervalOverRange, which is the
+// part that survives untouched. P5.1 re-points it at FSRS's due date; these pin
+// the scan behaviour it must still have afterwards.
 
 // ---------------------------------------------------------------------------
-// textInterval — same thresholds as upstream (m = interval/3.04375, y = interval/36.525)
+// textInterval — unchanged by the migration, moved to interval-text.ts
 // ---------------------------------------------------------------------------
 
 describe("textInterval", () => {
@@ -155,68 +68,166 @@ describe("textInterval", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SRAlgorithmOsr — card-level methods (use our defaults)
+// DueDateHistogram — the scan P5.1 will re-point at FSRS's due date
 // ---------------------------------------------------------------------------
 
-describe("SRAlgorithmOsr — card scheduling", () => {
-    beforeEach(() => {
-        setupStaticDateProvider("2023-09-06");
+describe("DueDateHistogram.findLeastUsedIntervalOverRange", () => {
+    it("returns the interval untouched when that day is empty", () => {
+        const h = new DueDateHistogram();
+        h.set(20, 5);
+        expect(h.findLeastUsedIntervalOverRange(10, 3)).toBe(10);
     });
 
-    it("cardGetResetSchedule with null schedule: interval=1, ease=baseEase, due 1 day out", () => {
-        const algo = new SRAlgorithmOsr(DEFAULT_SETTINGS);
-        const result = algo.cardGetResetSchedule(null);
-        expect(result.interval).toBe(1);
-        expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
-        expect(result.dueDate.format("YYYY-MM-DD")).toBe("2023-09-07");
+    it("moves to the nearest empty day within the fuzz window", () => {
+        const h = new DueDateHistogram();
+        h.set(10, 4);
+        // i=1 probes 9 first (earlier wins the tie), and 9 is empty
+        expect(h.findLeastUsedIntervalOverRange(10, 3)).toBe(9);
     });
 
-    it("cardGetResetSchedule with existing schedule: applies lapsesIntervalChange", () => {
-        const algo = new SRAlgorithmOsr({ ...DEFAULT_SETTINGS, lapsesIntervalChange: 0.5 });
-        const old = RepItemScheduleInfoOsr.fromDueDateStr("2023-09-01", 10, DEFAULT_SETTINGS.baseEase, 0);
-        const result = algo.cardGetResetSchedule(old);
-        expect(result.interval).toBe(5);
-        expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
+    it("prefers the earlier day when probing a symmetric pair", () => {
+        const h = new DueDateHistogram();
+        h.set(10, 4);
+        h.set(9, 1);
+        h.set(11, 1);
+        // 9 and 11 are both occupied and equal; 9 is probed first and kept
+        expect(h.findLeastUsedIntervalOverRange(10, 1)).toBe(9);
     });
 
-    it("cardGetNewSchedule Good → non-zero interval, ease = baseEase", () => {
-        const algo = new SRAlgorithmOsr(DEFAULT_SETTINGS);
-        const result = algo.cardGetNewSchedule(ReviewResponse.Good, emptyHistogram);
-        expect(result.interval).toBeGreaterThanOrEqual(1);
-        expect(result.latestEase).toBe(DEFAULT_SETTINGS.baseEase);
+    it("picks the least-used day when every day in the window is occupied", () => {
+        const h = new DueDateHistogram();
+        h.set(9, 5);
+        h.set(10, 4);
+        h.set(11, 1);
+        expect(h.findLeastUsedIntervalOverRange(10, 1)).toBe(11);
     });
 
-    it("cardCalcUpdatedSchedule Good grows interval", () => {
-        const algo = new SRAlgorithmOsr(UPSTREAM_DEFAULTS);
-        const initial = RepItemScheduleInfoOsr.fromDueDateStr("2023-09-06", 10, UPSTREAM_DEFAULTS.baseEase, 0);
-        const updated = algo.cardCalcUpdatedSchedule(ReviewResponse.Good, initial, emptyHistogram);
-        expect(updated.interval).toBeGreaterThan(10);
+    it("keeps the original day when nothing in the window is strictly better", () => {
+        const h = new DueDateHistogram();
+        for (let d = 8; d <= 12; d++) h.set(d, 3);
+        // Every candidate ties the original at 3, and the scan only moves on a
+        // strict improvement — so the requested day stands.
+        expect(h.findLeastUsedIntervalOverRange(10, 1)).toBe(10);
     });
 
-    it("cardCalcUpdatedSchedule Again zeroes interval", () => {
-        const algo = new SRAlgorithmOsr(DEFAULT_SETTINGS);
-        const initial = RepItemScheduleInfoOsr.fromDueDateStr("2023-09-06", 10, DEFAULT_SETTINGS.baseEase, 0);
-        const updated = algo.cardCalcUpdatedSchedule(ReviewResponse.Again, initial, emptyHistogram);
-        expect(updated.interval).toBe(0);
+    it("never looks beyond the fuzz window", () => {
+        const h = new DueDateHistogram();
+        // Everything from 6 to 12 is occupied and equally loaded; 13 is the only
+        // free day anywhere near, and it sits three days out.
+        for (let d = 6; d <= 12; d++) h.set(d, 3);
+        // Out of reach at ±1, so the requested day stands.
+        expect(h.findLeastUsedIntervalOverRange(10, 1)).toBe(10);
+        // In reach at ±3. Note the probe order: each i tries the earlier day
+        // first, so a free day below the target would win — 7 is occupied here
+        // precisely so 13 is unambiguously the answer.
+        expect(h.findLeastUsedIntervalOverRange(10, 3)).toBe(13);
     });
 });
 
 // ---------------------------------------------------------------------------
-// RepItemScheduleInfoOsr — serialisation
+// dates.ts — rewritten in P3.8: native Date, no moment, no obsidian import
 // ---------------------------------------------------------------------------
 
-describe("RepItemScheduleInfoOsr — formatScheduleAsSRHtmlComment", () => {
-    beforeEach(() => {
+describe("parsePreferredDate", () => {
+    it("parses YYYY-MM-DD at local midnight", () => {
+        const d = parsePreferredDate("2026-09-30");
+        expect(d).not.toBeNull();
+        expect(d!.getFullYear()).toBe(2026);
+        expect(d!.getMonth()).toBe(8);
+        expect(d!.getDate()).toBe(30);
+        expect(d!.getHours()).toBe(0);
+        expect(d!.getMinutes()).toBe(0);
+    });
+
+    it("is strict: rejects the other formats the legacy parser allows", () => {
+        expect(parsePreferredDate("30-09-2026")).toBeNull();
+        expect(parsePreferredDate("Wed Sep 06 2023")).toBeNull();
+        expect(parsePreferredDate("2026-9-30")).toBeNull();
+        expect(parsePreferredDate("")).toBeNull();
+        expect(parsePreferredDate("nonsense")).toBeNull();
+    });
+
+    // The Date constructor rolls overflow forward (Feb 31 → Mar 3). A due date
+    // that does not exist must read as unparseable, not as a different day.
+    it("rejects impossible dates instead of rolling them forward", () => {
+        expect(parsePreferredDate("2026-02-31")).toBeNull();
+        expect(parsePreferredDate("2026-13-01")).toBeNull();
+        expect(parsePreferredDate("2026-00-10")).toBeNull();
+        expect(parsePreferredDate("2026-04-00")).toBeNull();
+    });
+
+    it("accepts a genuine leap day and rejects a false one", () => {
+        expect(parsePreferredDate("2024-02-29")).not.toBeNull();
+        expect(parsePreferredDate("2026-02-29")).toBeNull();
+    });
+
+    it("round-trips through formatDate", () => {
+        const d = parsePreferredDate("2026-09-30")!;
+        expect(formatDate(d.valueOf())).toBe("2026-09-30");
+    });
+});
+
+describe("parseLegacyDate", () => {
+    it("accepts every ALLOWED_DATE_FORMATS shape moment used to handle", () => {
+        expect(formatDate(parseLegacyDate("2023-09-06")!.valueOf())).toBe("2023-09-06");
+        expect(formatDate(parseLegacyDate("06-09-2023")!.valueOf())).toBe("2023-09-06");
+        expect(formatDate(parseLegacyDate("Wed Sep 06 2023")!.valueOf())).toBe("2023-09-06");
+    });
+
+    it("normalises to local midnight whatever the input precision", () => {
+        const d = parseLegacyDate("Wed Sep 06 2023 14:35:00")!;
+        expect(d.getHours()).toBe(0);
+        expect(formatDate(d.valueOf())).toBe("2023-09-06");
+    });
+
+    it("returns null for unparseable input", () => {
+        expect(parseLegacyDate("not a date")).toBeNull();
+        expect(parseLegacyDate("")).toBeNull();
+    });
+});
+
+describe("startOfDay", () => {
+    it("floors to local midnight without shifting the calendar day", () => {
+        const d = startOfDay(new Date(2026, 8, 30, 23, 59, 59));
+        expect(d.getFullYear()).toBe(2026);
+        expect(d.getMonth()).toBe(8);
+        expect(d.getDate()).toBe(30);
+        expect(d.getHours()).toBe(0);
+    });
+});
+
+describe("date providers", () => {
+    it("StaticDateProvider.today is midnight, now is the exact instant", () => {
+        const p = new StaticDateProvider(new Date(2026, 8, 30, 14, 30, 0));
+        expect(p.now.getHours()).toBe(14);
+        expect(p.today.getHours()).toBe(0);
+        expect(formatDate(p.today.valueOf())).toBe("2026-09-30");
+    });
+
+    it("setupStaticDateProvider installs a provider parsed from a date string", () => {
         setupStaticDateProvider("2023-09-06");
+        expect(formatDate(globalDateProvider.today.valueOf())).toBe("2023-09-06");
     });
 
-    it("formats as !YYYY-MM-DD,interval,ease", () => {
-        const info = RepItemScheduleInfoOsr.fromDueDateStr("2023-09-06", 4, 270, 0);
-        expect(info.formatScheduleAsSRHtmlComment()).toBe("!2023-09-06,4,270");
+    it("StaticDateProvider.now returns a fresh Date each read", () => {
+        const p = new StaticDateProvider(new Date(2026, 8, 30, 14, 30, 0));
+        const a = p.now;
+        a.setFullYear(1999);
+        expect(p.now.getFullYear()).toBe(2026);
     });
 
-    it("new card uses dummyDueDateForNewCard", () => {
-        const info = RepItemScheduleInfoOsr.getNewSchedule(DEFAULT_SETTINGS);
-        expect(info.formatScheduleAsSRHtmlComment()).toContain(RepItemScheduleInfoOsr.dummyDueDateForNewCard);
+    // P6.2's job. Recorded here so the gap is a documented expectation rather
+    // than a surprise: the provider stores the boundary and ignores it.
+    it("StaticDateProvider still ignores the day boundary (Phase 6 implements it)", () => {
+        const p = new StaticDateProvider(new Date(2026, 8, 30, 2, 0, 0));
+        p.setDayBoundary({ hour: 4, minute: 0, second: 0 });
+        expect(p.getDayBoundary()).toEqual({ hour: 4, minute: 0, second: 0 });
+        expect(formatDate(p.today.valueOf())).toBe("2026-09-30");
+    });
+
+    it("LiveDateProvider.today is midnight of the current day by default", () => {
+        const p = new LiveDateProvider();
+        expect(p.today.getHours()).toBe(0);
+        expect(formatDate(p.today.valueOf())).toBe(formatDate(Date.now()));
     });
 });

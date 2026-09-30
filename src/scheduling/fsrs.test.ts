@@ -4,14 +4,20 @@ import { DEFAULT_SETTINGS, REQUEST_RETENTION_MAX, REQUEST_RETENTION_MIN } from "
 import type { EuphoricSettings } from "src/settings";
 import {
     buildFsrsParameters,
+    diffInDays,
     emptyCard,
     FSRS_GRADES,
     FsrsEngine,
     fsrsDefaultWeights,
     Rating,
+    ratingFor,
+    scheduledDays,
     State,
+    toCard,
+    toScheduleInfo,
 } from "src/scheduling/fsrs";
-import type { Card, Grade } from "src/scheduling/fsrs";
+import type { Card, Grade, ScheduleInfo } from "src/scheduling/fsrs";
+import { ReviewResponse } from "src/scheduling/review-response";
 
 const NOW = new Date("2026-01-15T10:00:00Z");
 
@@ -423,5 +429,161 @@ describe("enable_fuzz: false — the histogram is the only jitter source", () =>
     it("exposes no enable_fuzz control anywhere in settings", () => {
         expect("enableFuzz" in DEFAULT_SETTINGS).toBe(false);
         expect("enable_fuzz" in DEFAULT_SETTINGS).toBe(false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3: the ScheduleInfo data model and its converters
+// ---------------------------------------------------------------------------
+
+describe("ScheduleInfo ↔ Card converters", () => {
+    const NOW = new Date(2026, 0, 20, 14, 30, 0);
+
+    const reviewed: ScheduleInfo = {
+        due: new Date(2026, 0, 25),
+        stability: 12.3456,
+        difficulty: 6.5,
+        reps: 7,
+        lapses: 2,
+        state: State.Review,
+        last_review: new Date(2026, 0, 15),
+    };
+
+    it("round-trips every stored field", () => {
+        const back = toScheduleInfo(toCard(reviewed, NOW));
+        expect(back.due.valueOf()).toBe(reviewed.due.valueOf());
+        expect(back.stability).toBe(reviewed.stability);
+        expect(back.difficulty).toBe(reviewed.difficulty);
+        expect(back.reps).toBe(reviewed.reps);
+        expect(back.lapses).toBe(reviewed.lapses);
+        expect(back.state).toBe(reviewed.state);
+        expect(back.last_review!.valueOf()).toBe(reviewed.last_review!.valueOf());
+    });
+
+    // §B4: these two are derived, never stored. The file therefore cannot
+    // disagree with the calendar.
+    it("recomputes elapsed_days from last_review and the clock", () => {
+        // 15th → 20th is 5 days; the 14:30 wall time is floored away.
+        expect(toCard(reviewed, NOW).elapsed_days).toBe(5);
+        // Reading the same card later gives a larger elapsed_days from identical
+        // stored state — the point of not persisting it.
+        expect(toCard(reviewed, new Date(2026, 0, 27)).elapsed_days).toBe(12);
+    });
+
+    it("recomputes scheduled_days as last_review → due", () => {
+        // 15th → 25th is 10 days, independent of `now`.
+        expect(toCard(reviewed, NOW).scheduled_days).toBe(10);
+        expect(toCard(reviewed, new Date(2027, 5, 1)).scheduled_days).toBe(10);
+    });
+
+    it("always reports learning_steps as 0", () => {
+        // Always 0 under B1, which is why B4 does not store it.
+        expect(toCard(reviewed, NOW).learning_steps).toBe(0);
+    });
+
+    it("never reports negative elapsed or scheduled days", () => {
+        const future: ScheduleInfo = { ...reviewed, last_review: new Date(2026, 5, 1) };
+        expect(toCard(future, NOW).elapsed_days).toBe(0);
+        expect(toCard(future, NOW).scheduled_days).toBe(0);
+    });
+
+    // The one place ts-fsrs's `Date | undefined` and B4's `Date | null` meet.
+    it("translates a null last_review to an absent property, and back to null", () => {
+        const never: ScheduleInfo = { ...reviewed, last_review: null, state: State.New };
+        const card = toCard(never, NOW);
+        expect(card.last_review).toBeUndefined();
+        expect("last_review" in card).toBe(false);
+        expect(card.elapsed_days).toBe(0);
+        expect(toScheduleInfo(card).last_review).toBeNull();
+    });
+
+    it("a card straight out of the engine converts cleanly", () => {
+        const engine = new FsrsEngine(settings());
+        const graded = engine.schedule(emptyCard(NOW), Rating.Good, NOW);
+        const info = toScheduleInfo(graded);
+        expect(info.state).toBe(State.Review);
+        expect(info.last_review).not.toBeNull();
+        expect(info.reps).toBe(1);
+        // And converting back preserves what the engine produced.
+        expect(toCard(info, NOW).stability).toBe(graded.stability);
+    });
+});
+
+describe("scheduledDays", () => {
+    it("is the whole-day gap from last_review to due", () => {
+        expect(scheduledDays({
+            due: new Date(2026, 0, 25), stability: 1, difficulty: 5, reps: 1, lapses: 0,
+            state: State.Review, last_review: new Date(2026, 0, 15),
+        })).toBe(10);
+    });
+
+    it("is 0 for a face with no recorded review", () => {
+        expect(scheduledDays({
+            due: new Date(2026, 0, 25), stability: 0, difficulty: 0, reps: 0, lapses: 0,
+            state: State.New, last_review: null,
+        })).toBe(0);
+    });
+
+    // What the interval previews render. B1 guarantees >= 1, so textInterval
+    // never has a sub-day value to format.
+    it("matches the engine's own scheduled_days for every grade", () => {
+        const engine = new FsrsEngine(settings());
+        const now = new Date(2026, 0, 20);
+        for (const grade of FSRS_GRADES) {
+            const card = engine.schedule(emptyCard(now), grade, now);
+            expect(scheduledDays(toScheduleInfo(card))).toBe(card.scheduled_days);
+            expect(scheduledDays(toScheduleInfo(card))).toBeGreaterThanOrEqual(1);
+        }
+    });
+});
+
+describe("diffInDays", () => {
+    it("floors rather than rounds", () => {
+        const a = new Date(2026, 0, 1, 0, 0, 0);
+        expect(diffInDays(a, new Date(2026, 0, 1, 23, 59, 59))).toBe(0);
+        expect(diffInDays(a, new Date(2026, 0, 2, 0, 0, 0))).toBe(1);
+        expect(diffInDays(a, new Date(2026, 0, 2, 23, 59, 59))).toBe(1);
+    });
+
+    it("goes negative for a future `to`", () => {
+        expect(diffInDays(new Date(2026, 0, 10), new Date(2026, 0, 1))).toBe(-9);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// §C3: the polarity landmine. ReviewResponse is Easy=0..Again=3 and FSRS Rating
+// is Again=1..Easy=4 — reversed, EXCEPT that Hard is 2 in both. A naive cast
+// inverts three of the four values while the one a spot-check most often lands
+// on keeps working.
+// ---------------------------------------------------------------------------
+
+describe("ratingFor", () => {
+    it("maps every response to the correct FSRS grade", () => {
+        expect(ratingFor(ReviewResponse.Again)).toBe(Rating.Again);
+        expect(ratingFor(ReviewResponse.Hard)).toBe(Rating.Hard);
+        expect(ratingFor(ReviewResponse.Good)).toBe(Rating.Good);
+        expect(ratingFor(ReviewResponse.Easy)).toBe(Rating.Easy);
+    });
+
+    it("is NOT the identity — the one that would look right is Hard", () => {
+        // The trap, pinned: Hard alone survives a naive cast.
+        expect(ratingFor(ReviewResponse.Hard) as number).toBe(ReviewResponse.Hard as number);
+        // ...and the other three do not.
+        expect(ratingFor(ReviewResponse.Again) as number).not.toBe(ReviewResponse.Again as number);
+        expect(ratingFor(ReviewResponse.Good) as number).not.toBe(ReviewResponse.Good as number);
+        expect(ratingFor(ReviewResponse.Easy) as number).not.toBe(ReviewResponse.Easy as number);
+    });
+
+    it("preserves quality order: worse response → shorter interval", () => {
+        const engine = new FsrsEngine(settings());
+        const now = new Date(2026, 0, 20);
+        const days = (r: ReviewResponse): number =>
+            engine.schedule(emptyCard(now), ratingFor(r), now).scheduled_days;
+        // Again <= Hard <= Good <= Easy. If the mapping were inverted this is the
+        // assertion that fails.
+        expect(days(ReviewResponse.Again)).toBeLessThanOrEqual(days(ReviewResponse.Hard));
+        expect(days(ReviewResponse.Hard)).toBeLessThanOrEqual(days(ReviewResponse.Good));
+        expect(days(ReviewResponse.Good)).toBeLessThanOrEqual(days(ReviewResponse.Easy));
+        expect(days(ReviewResponse.Again)).toBeLessThan(days(ReviewResponse.Easy));
     });
 });

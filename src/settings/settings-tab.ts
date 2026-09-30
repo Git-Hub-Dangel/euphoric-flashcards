@@ -344,7 +344,15 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Maximum interval",
-                        desc: "Cards will not be scheduled beyond this many days.",
+                        // P3.10: the old wording ("Cards will not be scheduled
+                        // beyond this many days") was true under SM-2 and became
+                        // false the moment FSRS took over. maximum_interval is a
+                        // soft ceiling: FSRS clamps each grade to it and then
+                        // enforces again < hard < good < easy by bumping each
+                        // past the previous, so saturated intervals land a day or
+                        // two above the limit. That ordering is what the interval
+                        // previews depend on, so it is not clamped away.
+                        desc: "The longest interval FSRS will aim for, in days. Once a card reaches this ceiling the better answers may still land a day or two beyond it, so that the response buttons stay in order.",
                         control: { type: "slider", key: "maximumInterval", min: 7, max: 36525, step: 1 },
                     },
                     {

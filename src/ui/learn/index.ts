@@ -2,13 +2,14 @@ import { App, Modal, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
-import { SRAlgorithmOsr, textInterval } from "src/scheduling/osr";
+import { textInterval } from "src/scheduling/interval-text";
 import { withUpdatedSchedules, frontFace, backFace, cardReveal, parseCard } from "src/parsing";
 import type { CardFace } from "src/parsing";
-import type { ScheduleInfo } from "src/persistence";
+import { ratingFor, scheduledDays } from "src/scheduling/fsrs";
+import type { GradeRecord, ScheduleInfo } from "src/scheduling/fsrs";
 import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
-import { previewInterval, applyResponse } from "src/scheduling/session-helpers";
+import { previewAll } from "src/scheduling/session-helpers";
 import { loadCardsForDeck, writeCardBack } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboard } from "src/ui/modal-utils";
@@ -50,6 +51,10 @@ export class LearnModal extends Modal {
     private fileCache = new Map<string, string>();
     private keymapHandlers: KeymapEventHandler[] = [];
     private revealed = false;
+    // Every outcome for the face on screen, from one FSRS call at reveal time.
+    // The previews and the subsequent write read the same record, so they cannot
+    // disagree (plan P3.5).
+    private pendingPreview: GradeRecord<ScheduleInfo> | null = null;
     // Permanent chrome (header + action row) staggers in only on first render;
     // between steps the borders stay static. Body containers stagger on every swap.
     private firstRender = true;
@@ -128,7 +133,7 @@ export class LearnModal extends Modal {
 
         this.constraintPool = buildConstructionConstraintPool(s, this.options.selectionDeckTag);
 
-        const today = globalDateProvider.today.toDate();
+        const today = globalDateProvider.today;
         const pools = classifyPools(cards, today);
         this.session = new LearnSession(pools, {
             groupLimit: this.options.groupLimit,
@@ -199,6 +204,9 @@ export class LearnModal extends Modal {
         if (!this.bodyEl || !this.footerEl) return;
         this.clearKeymap();
         this.revealed = false;
+        // See the note in ReviewModal.renderCard: a new face invalidates the
+        // previous face's preview snapshot.
+        this.pendingPreview = null;
 
         this.renderHeader(item);
 
@@ -255,25 +263,30 @@ export class LearnModal extends Modal {
     private renderFaceActions(item: LearnItem, isPostAgain: boolean, schedule: ScheduleInfo | null): void {
         if (!this.footerEl) return;
         const settings = this.plugin.data.settings;
-        // Interval previews only make sense when the answer will actually be written.
+        // Interval previews only make sense when the answer will actually be
+        // written — B2's rule, and already true here before FSRS.
         const showInterval = settings.showIntervalOnButtons && item.writeEligible;
+        const preview = previewAll(schedule, this.plugin, globalDateProvider.now);
+        this.pendingPreview = preview;
+        const label = (response: ReviewResponse): string | null =>
+            showInterval ? textInterval(scheduledDays(preview[ratingFor(response)]), true) : null;
 
         if (isPostAgain) {
             this.addResponseButton(this.footerEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
                 () => { void this.handleFaceAnswer(item, "Again"); });
-            this.addResponseButton(this.footerEl, 2, "OK", "ef-btn-good", "check", showInterval ? "1d" : null,
+            this.addResponseButton(this.footerEl, 2, "OK", "ef-btn-good", "check",
+                label(ReviewResponse.Again),
                 () => { void this.handleFaceAnswer(item, "OK"); });
             return;
         }
 
-        const okayInterval = showInterval ? textInterval(previewInterval(schedule, ReviewResponse.Hard, this.plugin), true) : null;
-        const goodInterval = showInterval ? textInterval(previewInterval(schedule, ReviewResponse.Good, this.plugin), true) : null;
-
         this.addResponseButton(this.footerEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
             () => { void this.handleFaceAnswer(item, "Again"); });
-        this.addResponseButton(this.footerEl, 2, "Okay", "ef-btn-okay", "activity", okayInterval,
+        this.addResponseButton(this.footerEl, 2, "Okay", "ef-btn-okay", "activity",
+            label(ReviewResponse.Hard),
             () => { void this.handleFaceAnswer(item, "Okay"); });
-        this.addResponseButton(this.footerEl, 3, "Good", "ef-btn-good", "check", goodInterval,
+        this.addResponseButton(this.footerEl, 3, "Good", "ef-btn-good", "check",
+            label(ReviewResponse.Good),
             () => { void this.handleFaceAnswer(item, "Good"); });
     }
 
@@ -319,12 +332,17 @@ export class LearnModal extends Modal {
         this.renderStep();
     }
 
+    // Both intents now resolve through the same FSRS snapshot the buttons were
+    // rendered from. `reset` (the post-Again OK) becomes a genuine Rating.Again:
+    // its old SM-2 behaviour multiplied the interval by lapsesIntervalChange,
+    // which has no FSRS equivalent — B2 has FSRS's stability floor supply lapse
+    // severity instead. P4.5 deletes the intent kind altogether.
     private computeScheduleFor(item: LearnItem, intent: WriteIntent): ScheduleInfo {
-        if (intent.kind === "reset") {
-            const algo = new SRAlgorithmOsr(this.plugin.data.settings);
-            return algo.cardGetResetSchedule(item.card.schedules[item.faceIndex]);
-        }
-        return applyResponse(item.card.schedules[item.faceIndex], intent.response, this.plugin);
+        const response = intent.kind === "reset" ? ReviewResponse.Again : intent.response;
+        const preview = this.pendingPreview ?? previewAll(
+            item.card.schedules[item.faceIndex], this.plugin, globalDateProvider.now,
+        );
+        return preview[ratingFor(response)];
     }
 
     private renderSentence(words: SentenceWordSelection[]): void {
@@ -406,7 +424,7 @@ export class LearnModal extends Modal {
                     return "Card could not be parsed. Check the `word :: translation` and any `=type` markers.";
                 }
                 const finalLines = hadSchedule
-                    ? withUpdatedSchedules(parsed, item.card.schedules, this.plugin.data.settings.baseEase)
+                    ? withUpdatedSchedules(parsed, item.card.schedules)
                     : editedLines;
 
                 const oldLength = item.card.rawLines.length;

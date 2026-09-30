@@ -1,5 +1,5 @@
 import { buildScheduleComment, parseScheduleComment } from "src/persistence/comment-parser";
-import type { ScheduleInfo } from "src/persistence/comment-parser";
+import type { ScheduleInfo } from "src/scheduling/fsrs";
 
 // types
 
@@ -248,9 +248,8 @@ export function cardReveal(card: ParsedCard): CardReveal {
 export function withUpdatedSchedules(
     card: ParsedCard,
     schedules: [ScheduleInfo | null, ScheduleInfo | null],
-    baseEase: number,
 ): string[] {
-    const newComment = buildScheduleComment(schedules, baseEase);
+    const newComment = buildScheduleComment(schedules);
 
     const textLines: string[] = [];
     for (const line of card.rawLines) {
