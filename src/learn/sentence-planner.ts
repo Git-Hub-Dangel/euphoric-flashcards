@@ -4,7 +4,7 @@ import type { AnchorLocation, CardLocation } from "src/learn/pool";
 import type { GroupCardState } from "src/learn/group-state";
 import {
     LEARN_ANCHOR_FUZZ,
-    LEARN_ANCHOR_REF_DAYS,
+    LEARN_ANCHOR_REF_STABILITY,
     LEARN_ANCHOR_TILT_MAX,
     LEARN_ANCHOR_TILT_MIN,
     LEARN_SENTENCE_TRIGGER,
@@ -59,13 +59,19 @@ function baseWeight(st: GroupCardState | undefined): number {
     return 1;
 }
 
-// Mild tilt toward the anchors closest to slipping, clamped so one short
-// interval anchor cannot own every draw, jittered so neighbouring intervals
-// reorder between draws, and halved per prior appearance this session.
-function anchorWeight(interval: number, seen: number, rng: () => number): number {
+// Mild tilt toward the anchors closest to slipping, clamped so one low-stability
+// anchor cannot own every draw, jittered so neighbouring stabilities reorder
+// between draws, and halved per prior appearance this session.
+//
+// The quantity is stability now; the sampler's properties are transferred
+// verbatim from the SM-2 version (plan §C3) — the 4x clamp, the +-0.35 per-draw
+// jitter and the 0.5^seen damping. A bare 1/x weight was tried upstream and
+// rejected: it handed the weakest anchor over half of all draws. Invariant 33's
+// 600-draw spread test in sentence-planner.test.ts is what holds this in place.
+function anchorWeight(stability: number, seen: number, rng: () => number): number {
     const tilt = Math.min(
         LEARN_ANCHOR_TILT_MAX,
-        Math.max(LEARN_ANCHOR_TILT_MIN, LEARN_ANCHOR_REF_DAYS / Math.max(interval, 1)),
+        Math.max(LEARN_ANCHOR_TILT_MIN, LEARN_ANCHOR_REF_STABILITY / Math.max(stability, 1)),
     );
     const fuzz = 1 - LEARN_ANCHOR_FUZZ + 2 * LEARN_ANCHOR_FUZZ * rng();
     return tilt * fuzz * Math.pow(0.5, seen);

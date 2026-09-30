@@ -5,6 +5,7 @@ import {
     buildInitialQueue,
     groupProgress,
     isGroupComplete,
+    isWorseThan,
     makeInitialStates,
     recordAgain,
     recordClear,
@@ -101,7 +102,8 @@ describe("group state recording", () => {
         const states = makeInitialStates(cards);
         const queue = [item];
         recordAgain(states, queue, 0, item, 1, mulberry32(1));
-        // Post-Again OK maps to Hard, but must not overwrite worst=Again.
+        // The re-drill answer maps to Hard, but must not talk `worst` back up
+        // from Again (B2: the re-drill clears the face and writes nothing).
         recordClear(states, item, ReviewResponse.Hard, true);
         expect(states.get(item.card)!.worst).toBe(ReviewResponse.Again);
         expect(states.get(item.card)!.pendingFaces.has(0)).toBe(false);
@@ -123,5 +125,53 @@ describe("group state recording", () => {
         }
         expect(isGroupComplete(states)).toBe(true);
         expect(groupProgress(states)).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P4.4 — worstOf polarity.
+//
+// `worst` used to be computed with a bare `next > prev` on ReviewResponse, which
+// was correct only because that enum happens to run Easy=0 .. Again=3. FSRS's
+// Rating runs the other way (Again=1 .. Easy=4) while agreeing on Hard=2, so any
+// future swap or reorder would invert three of four values and leave Hard working
+// — the §C3 landmine exactly. The ordering is now an explicit rank table, and
+// these tests pin it so the enum's numeric values stop being load-bearing.
+// ---------------------------------------------------------------------------
+
+describe("response quality ordering", () => {
+    it("ranks Again worst and Easy best, in order", () => {
+        expect(isWorseThan(ReviewResponse.Again, ReviewResponse.Hard)).toBe(true);
+        expect(isWorseThan(ReviewResponse.Hard, ReviewResponse.Good)).toBe(true);
+        expect(isWorseThan(ReviewResponse.Good, ReviewResponse.Easy)).toBe(true);
+        // ...and not the other way round.
+        expect(isWorseThan(ReviewResponse.Hard, ReviewResponse.Again)).toBe(false);
+        expect(isWorseThan(ReviewResponse.Good, ReviewResponse.Hard)).toBe(false);
+        expect(isWorseThan(ReviewResponse.Easy, ReviewResponse.Good)).toBe(false);
+    });
+
+    it("is not strict on equal responses", () => {
+        for (const r of [
+            ReviewResponse.Again, ReviewResponse.Hard, ReviewResponse.Good, ReviewResponse.Easy,
+        ]) {
+            expect(isWorseThan(r, r)).toBe(false);
+        }
+    });
+
+    it("keeps the worst answer across a whole group, whatever the order", () => {
+        const cards = [makeCard([null, null], { word: "w" })];
+        const item = { ...cards[0]!, faceIndex: 0 as const, writeEligible: true };
+
+        // Good then Hard → Hard is worse and sticks.
+        const a = makeInitialStates(cards);
+        recordClear(a, item, ReviewResponse.Good, false);
+        recordClear(a, item, ReviewResponse.Hard, false);
+        expect(a.get(item.card)!.worst).toBe(ReviewResponse.Hard);
+
+        // Hard then Good → Hard still stands; a better answer never improves it.
+        const b = makeInitialStates(cards);
+        recordClear(b, item, ReviewResponse.Hard, false);
+        recordClear(b, item, ReviewResponse.Good, false);
+        expect(b.get(item.card)!.worst).toBe(ReviewResponse.Hard);
     });
 });

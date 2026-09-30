@@ -2,15 +2,15 @@
 
 Companion to `FSRS_IMPLEMENTATION_PLAN.md`. That file holds the work to do; this one records what is done, what was learned doing it, and what the next agent must not re-derive. The plan still wins on intent; this file wins on current state.
 
-**Status: Phases 1–3 complete. Phase 4 is next.**
+**Status: Phases 1–4 complete. Phase 5 is next.**
 
-| | Baseline | After P1 | After P2 | After P3 |
-|---|---|---|---|---|
-| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | **284 / 14** |
-| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean |
-| `npm run build` | clean | clean | clean | clean |
-| `main.js` | 125,913 B | 126,681 B | 128,473 B | **191,203 B** |
-| `dataVersion` | — | 2 | 3 | **3** (unchanged) |
+| | Baseline | After P1 | After P2 | After P3 | After P4 |
+|---|---|---|---|---|---|
+| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | 284 / 14 | **302 / 14** |
+| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean | clean |
+| `npm run build` | clean | clean | clean | clean | clean |
+| `main.js` | 125,913 B | 126,681 B | 128,473 B | 191,203 B | **190,465 B** |
+| `dataVersion` | — | 2 | 3 | 3 | **4** |
 
 The `main.js` jump of **+62,730 B** is ts-fsrs entering the bundle for the first
 time, and it lands within 2 KB of the 60,929 B the Phase 2 probe predicted. Phase
@@ -86,7 +86,9 @@ All of these are now permanent tests, not one-off probes.
 
 **2. `get_retrievability` returns exactly `0` for `State.New`.** In an ascending sort that is the *most urgent* slot, so a New face leaking into the due ranking silently jumps the queue. Asserted at the engine level in `fsrs.test.ts`; the pool-level assertion is → **plan amended: P4.2b.**
 
-**3. `date_diff(..., 'days')` floors, measured from the `last_review` instant** (not a calendar boundary). Retrievability ties for any two reads inside the same 24-hour window after the last review — a window that straddles midnight. Ties are therefore common, so P4.2's `difficulty`-descending tie-break is load-bearing, not incidental.
+**3. `date_diff(..., 'days')` floors.** Ties are therefore common, so P4.2's `difficulty`-descending tie-break is load-bearing, not incidental — and P4.2b's test asserts that two same-day, same-stability faces return *byte-identical* retrievability (`toBe`, not `toBeCloseTo`).
+
+> **Superseded mechanism, conclusion unchanged.** As measured in Phase 2 this floored from the `last_review` *instant*, so ties fell inside a rolling 24-hour window that straddled midnight. Phase 3 stores `last_review` as a calendar date (per B4/B5), so the flooring now runs from local midnight and ties land on calendar-day boundaries instead. Ties became *more* common, not less.
 
 **4. FSRS does not count a failed New card as a lapse.** `Again` on `State.New` gives `lapses: 0`; only a `State.Review` card increments. **Phase 4's exit criterion "`Again` writes once and increments `lapses`" must be checked against a learned card**, or it fails for the wrong reason.
 
@@ -121,7 +123,7 @@ Added to `FSRS_IMPLEMENTATION_PLAN.md`:
 
 Phase 3 additions:
 
-- **P4.0 (new, Phase 4's first task)** — delete `baseEase`, `defaultIntervalChange`
+- **P4.0 (new, Phase 4's first task)** ✅ done — delete `baseEase`, `defaultIntervalChange`
   and `lapsesIntervalChange`: the three `PluginData` keys, their three settings
   rows, and their three lines in "Restore Default Settings", via a v3→v4 migration
   step. All three have had zero consumers since `osr.ts` was deleted. B2 only names
@@ -162,6 +164,20 @@ rediscover them:
   longer imports `obsidian` either.
 - **The settings-tab inventory.** The `maximumInterval` description changed (P3.10),
   and three Scheduling rows are slated for deletion in P4.0.
+### Newly stale after Phase 4 — also for P7.9
+
+- **Invariant 19 is now genuinely dead** (SM-2 ease has no readers at all).
+- **The rating contract.** Anything describing the post-Again `OK` button, a
+  two-button post-Again surface, or `Again` as non-writing. Three buttons now,
+  everywhere, and the first answer on a face writes.
+- **The Learn taxonomy.** Maturity and the anchor floor are stability thresholds;
+  the due ranking is retrievability ascending with a difficulty tie-break.
+- **Settings.** Three Scheduling rows are gone; `dataVersion` is 4.
+- **New invariants earned in Phase 4:** the first answer per face writes and
+  nothing else in the session does; an interval preview is rendered iff a write
+  will occur; a New face never enters the due ranking; response-quality ordering
+  is an explicit table, not the enum's numeric values.
+
 - **New invariants earned in Phase 3:** `ScheduleInfo` is the only card-state type
   and it lives beside its converters; `elapsed_days` and `scheduled_days` are never
   persisted; both stored dates are calendar dates, so FSRS measures elapsed time in
@@ -171,7 +187,7 @@ rediscover them:
 
 ## PHASE 3 — Data model and persistence ✅
 
-Uncommitted at time of writing. The largest phase, as predicted: redefining
+Committed as `5659e5a`. The largest phase, as predicted: redefining
 `ScheduleInfo` made `tsc` enumerate 15 consumer files, and every one of them was a
 real consumer.
 
@@ -211,12 +227,19 @@ real consumer.
   "never reviewed" case explicit at every read site. `toCard` omits the property
   entirely when null (ts-fsrs checks truthiness) and `toScheduleInfo` maps
   `undefined → null`. Those two functions are the only place the spellings meet.
-- **Both dates are stored as calendar dates (`YYYY-MM-DD`), not instants.** B1 makes
-  scheduling day-granular, so a time component has nothing to contribute and would
-  only make the comments unreadable. This has a *good* consequence worth knowing:
-  because `last_review` reads back as local midnight, FSRS measures elapsed time in
-  whole **calendar** days, so the retrievability ties of finding 3 now fall on day
-  boundaries instead of straddling midnight. The truncation is explicitly tested.
+- **Both dates are stored as calendar dates (`YYYY-MM-DD`), not instants —
+  implementing the plan, not choosing freely.** B1 relies on day granularity
+  throughout, and B5's converter seeding spells the format out: `last_review =
+  due − interval days` is date arithmetic yielding a date, so there is no instant
+  for the field to hold. `<last_review>` also sits in the same positional field
+  list as `<due>`, which was always `YYYY-MM-DD`.
+
+  The mechanical consequence to know: ts-fsrs sets `card.last_review` to the actual
+  review *instant* when it schedules, so the in-memory value carries a time that
+  the write truncates. That is correct per the format, and it changes what
+  finding 3 describes — elapsed time is now measured in whole **calendar** days, so
+  retrievability ties land on day boundaries rather than straddling midnight. The
+  truncation is explicitly tested.
 - **Floats are written at 4 dp.** ts-fsrs carries stability and difficulty at 8
   (`roundTo(x, 8)`). Four keeps the comment readable in the user's own note while
   costing 8.6 seconds of stability and a thousandth of a difficulty point — far
@@ -252,9 +275,12 @@ real consumer.
   an unfloored divisor lets one such face swamp the ranking. Dies with the function
   in P4.2.
 
-### ⚠️ Debt deliberately left for Phase 4
+### ⚠️ Debt left for Phase 4 — now resolved except where noted
 
-**Load balancing applies no jitter right now.** The histogram's
+> Phase 4 closed the settings item (as P4.0) and inherited the other two. Kept
+> here as the record of what Phase 3 knowingly deferred.
+
+**Load balancing applies no jitter right now.** → **still open, now Phase 5 (P5.1).** The histogram's
 increment / decrement / rebuild bookkeeping is fully correct and no counts are
 lost, but nothing consults it when scheduling, because re-pointing
 `findLeastUsedIntervalOverRange` at the returned `due: Date` is P5.1. `histogramFor`
@@ -262,7 +288,7 @@ is still exported and tested; it simply has no caller inside the scheduling path
 yet. `enable_fuzz` remains `false`, so the histogram is still the only place jitter
 will ever come from.
 
-**Three settings keys now have zero consumers:** `baseEase`,
+**Three settings keys now have zero consumers** → **resolved in P4.0.** `baseEase`,
 `defaultIntervalChange` and `lapsesIntervalChange`. Their sliders still render in
 the Scheduling group and do **nothing**. They were left in place because deleting
 `PluginData` keys requires a migration (EF.md invariant 11) and B2 already assigns
@@ -271,7 +297,7 @@ v3→v4 step, with their three settings rows and the three lines in "Restore Def
 Settings". Nothing user-facing ships before then: the plan has P3 and P4 landing in
 the same release.
 
-**Existing vaults read as un-scheduled until the converter exists.** A pre-FSRS
+**Existing vaults read as un-scheduled until the converter exists.** → **still open, Phase 5.** A pre-FSRS
 comment now parses to `null` on both faces. Deck Total still counts those cards,
 but Due and New both show 0 for them, so a 1.4.1 vault opened on this build looks
 like a deck of cards that are neither new nor due. That is Phase 5's entire reason
@@ -308,7 +334,119 @@ window is strictly better.
 
 ---
 
-## Next: PHASE 4 — Behaviour: Learn engine, rating contract, UI
+## PHASE 4 — Behaviour: Learn engine, rating contract, UI ✅
+
+Uncommitted at time of writing.
+
+- **P4.0** (added in Phase 3) `baseEase`, `defaultIntervalChange` and
+  `lapsesIntervalChange` deleted: interface, defaults, three settings rows, three
+  lines of "Restore Default Settings", and a **v3→v4 migration** step.
+  `CURRENT_DATA_VERSION` is now `4`.
+- **P4.1** `classifyPools` predicates on FSRS quantities. New face → `isFaceNew`
+  (null *or* `State.New`); maturity → `min stability >= LEARN_MATURE_STABILITY`;
+  anchor floor → `min stability >= LEARN_ANCHOR_MIN_STABILITY`. Min-across-faces
+  preserved. `minSeenEase` and `overdueRatio` deleted.
+- **P4.2** Due ranking → **retrievability ascending**, tie-broken by `difficulty`
+  descending. `RetrievabilityFn` is injected, not constructed in `pool.ts`.
+- **P4.2b** Four assertions that no New face reaches the due ranking.
+- **P4.3** `anchorWeight` reads stability; constants renamed
+  (`LEARN_ANCHOR_REF_DAYS` → `LEARN_ANCHOR_REF_STABILITY`, and the two threshold
+  constants). Clamp, jitter and `0.5^seen` damping transferred verbatim.
+- **P4.4** `worstOf` no longer leans on the enum's numeric values; an explicit
+  `QUALITY_RANK` table plus exported `isWorseThan`, with ordering tests.
+- **P4.5** B2 in the session: `Again` produces a write intent, `WriteIntent.kind`
+  deleted, `FaceAnswer` loses `"OK"`, new public `willWrite`.
+- **P4.6** Three buttons everywhere. `renderPostAgainButtons`, `handleReset` and
+  the `"1d"` string are gone; Review's `againItems` became `writtenItems`.
+- **P4.7** Previews from the one snapshot, rendered iff a write will occur.
+- **P4.8** `wasNew` → `isFaceNew`, so it cannot drift from `classifyPools`.
+- **P4.9** `pool.test.ts` ranking suite rewritten; `session.test.ts` gained a B2
+  suite; invariant 33's spread test preserved and passing.
+
+### Decisions taken in Phase 4
+
+- **`RetrievabilityFn` is injected into `classifyPools`,** not built there.
+  `pool.ts` stays pure ranking logic, the modal passes a closure over the live
+  engine, and — importantly — **the tests pass the real engine too.** A hand-rolled
+  monotonic stub would satisfy a *reversed* comparison just as happily as a correct
+  one, which is precisely the bug P4.2 exists to prevent.
+- **`isFaceNew` covers both spellings of "new"** (a `null` schedule and a stored
+  `State.New`) and lives in `fsrs.ts` beside `ScheduleInfo`. `classifyPools` and
+  `makeInitialStates` both call it, so the pool predicate and `wasNew` cannot
+  drift apart — they were independently written before.
+- **`minRetrievability` skips New faces rather than trusting the pool split.**
+  Defensive on purpose: `get_retrievability` returns exactly `0` for `State.New`
+  and `0` sorts *first* in an ascending ranking, so the failure mode is a Learn
+  session quietly serving new words ahead of forgotten ones — no error, no type
+  complaint.
+- **`worstOf` got an explicit rank table** rather than being migrated to `Rating`.
+  `ReviewResponse` stays the internal "what the user pressed" enum; what changed is
+  that its *numeric values stopped being load-bearing*. A bare `next > prev` was
+  correct only by coincidence of `Easy=0..Again=3`.
+- **Review's `againItems` became `writtenItems`.** Same set, inverted meaning:
+  it no longer records "this got an Again" but "this face has been written", which
+  is what B2 actually needs for both the no-second-write gate and the preview rule.
+  It is added to only *after* `writeGradedResponse` resolves, so a failed write
+  leaves the face writable.
+- **Cram keeps a separate `handleCramAgain`.** Cram must never write, in any
+  circumstance; giving it its own handler means the shared path can write
+  unconditionally on first answer without a mode test inside it.
+
+### ❓ Open question for the next agent — one unconfirmed pedagogical call
+
+**How should `difficulty` be aggregated across a card's two faces?** B3 fixes the
+sort *direction* (descending) and separately mandates min-across-faces for
+stability, but says nothing about difficulty. Phase 4 chose **max across faces**,
+mirroring the stability rule: one shaky direction is enough to promote a card.
+Pinned by `pool.test.ts` → "takes a card's difficulty from its hardest face, not
+its easiest".
+
+This was **not confirmed with the maintainer.** It matters for asymmetric cards,
+which are the norm in language decks where recognition and production diverge
+sharply — a word you recognise instantly but cannot produce ranks as hard under
+max-across-faces, and as middling under a mean. If the intended pedagogy is
+"rank on the face actually being drilled", this is the line to change (`pool.ts`,
+`maxSeenDifficulty`) and that one test with it. Everything else in the ranking is
+unaffected.
+
+### Findings from Phase 4
+
+**10. Retrievability and the old overdue ratio are closer than they look — and
+where they differ matters.** FSRS's forgetting curve is a function of `t/S` alone,
+where `t` runs from **last_review**. `overdueRatio` measured lateness from the
+**due date**. So the two agree whenever a card's scheduled interval equals its
+stability, and diverge when it does not — which is exactly what `maximum_interval`
+saturation produces (finding 1) and what Phase 5's converter will produce while it
+seeds stability from an SM-2 interval. The first fixture written to show the
+difference asserted the wrong sign and failed; the test that replaced it
+(`ranks on time since last review, not lateness against a clamped due date`) pins
+the real distinction. **Worth knowing in Phase 5:** converted cards will rank by
+`(days_overdue + old_interval) / stability`, so a vault converted with
+`stability = interval` ranks almost exactly as SM-2 would have. That is a feature,
+not a coincidence to design around.
+
+**11. The `difficulty` tie-break is reached constantly, not rarely.** ts-fsrs
+floors elapsed time to whole days, so two faces last reviewed on the same day with
+equal stability return *byte-identical* retrievability — `toBe`, not `toBeCloseTo`.
+Asserted directly in `pool.test.ts`.
+
+---
+
+## Next: PHASE 5 — Load balancing and the one-time converter
+
+Preconditions met. Two of Phase 3's three deferred items are Phase 5's opening
+work, and both are described in the Debt section above:
+
+- **P5.1** re-point `findLeastUsedIntervalOverRange` at the returned `due: Date`.
+  `histogramFor` is already exported and tested and has no caller in the
+  scheduling path; the five direct scan tests in `scheduling.test.ts` (finding 9)
+  are the baseline it must still satisfy afterwards.
+- **P5.3–P5.7** the converter. Use `parseLegacyDate` from
+  `src/scheduling/dates.ts` — it already handles all three `ALLOWED_DATE_FORMATS`
+  shapes without `moment`, and was kept for exactly this.
+
+Do not ship any of Phases 3–4 without Phase 5: a pre-FSRS vault currently reads as
+cards that are neither new nor due.
 
 Preconditions met. Read the **Debt** section above first: three of its items are
 Phase 4's opening moves.

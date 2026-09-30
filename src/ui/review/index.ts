@@ -86,7 +86,11 @@ export class ReviewModal extends Modal {
     private reviewed = 0;
     private fileCache = new Map<string, string>();
     private keymapHandlers: KeymapEventHandler[] = [];
-    private againItems = new Set<ReviewItem>();
+    // Faces this session has already written a schedule for. B2: the first answer
+    // on a face writes and nothing else in the session does, so this is both the
+    // no-second-write gate and the "show no preview" signal for the re-drill.
+    // Keyed by queue item, which is the face — a card's two faces are two items.
+    private writtenItems = new Set<ReviewItem>();
     // Every outcome for the face currently on screen, taken in one FSRS call when
     // the answer is revealed. Buttons render their previews from this record and
     // the write uses the very same entry, so the interval shown and the interval
@@ -268,8 +272,6 @@ export class ReviewModal extends Modal {
     ): void {
         if (this.mode === "Cram") {
             this.renderCramButtons(actionsEl, item);
-        } else if (this.againItems.has(item)) {
-            this.renderPostAgainButtons(actionsEl, item);
         } else {
             this.renderReviewButtons(actionsEl, item, schedule);
         }
@@ -282,14 +284,21 @@ export class ReviewModal extends Modal {
         return preview;
     }
 
+    // B2's preview rule: an interval is rendered if and only if a write will
+    // occur. On the post-Again re-drill the write already happened, so all three
+    // buttons come up bare.
     private previewLabel(
+        item: ReviewItem,
         preview: GradeRecord<ScheduleInfo>,
         response: ReviewResponse,
     ): string | null {
         if (!this.plugin.data.settings.showIntervalOnButtons) return null;
+        if (this.writtenItems.has(item)) return null;
         return textInterval(scheduledDays(preview[ratingFor(response)]), true);
     }
 
+    // Three buttons on every face, first pass and re-drill alike (B2). The
+    // post-Again "OK" surface is gone; Again now carries its own write.
     private renderReviewButtons(
         actionsEl: HTMLElement,
         item: ReviewItem,
@@ -297,37 +306,20 @@ export class ReviewModal extends Modal {
     ): void {
         const preview = this.snapshotPreview(schedule);
 
-        this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
-            () => this.handleAgain(item));
+        this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw",
+            this.previewLabel(item, preview, ReviewResponse.Again),
+            () => { void this.handleScheduledResponse(ReviewResponse.Again, item); });
         this.addResponseButton(actionsEl, 2, "Okay", "ef-btn-okay", "activity",
-            this.previewLabel(preview, ReviewResponse.Hard),
+            this.previewLabel(item, preview, ReviewResponse.Hard),
             () => { void this.handleScheduledResponse(ReviewResponse.Hard, item); });
         this.addResponseButton(actionsEl, 3, "Good", "ef-btn-good", "check",
-            this.previewLabel(preview, ReviewResponse.Good),
+            this.previewLabel(item, preview, ReviewResponse.Good),
             () => { void this.handleScheduledResponse(ReviewResponse.Good, item); });
-    }
-
-    // The post-Again re-drill. B2 deletes this surface outright in P4.6, at which
-    // point Again writes immediately and the re-drill writes nothing. Until then
-    // it keeps its shape, but its write now goes through FSRS as a genuine
-    // Rating.Again — lapse severity comes from the algorithm's stability floor
-    // rather than the old lapsesIntervalChange collapse to one day. The preview
-    // is the real Again interval for the same reason; the hardcoded "1d" it used
-    // to show became a lie the moment FSRS took over.
-    private renderPostAgainButtons(actionsEl: HTMLElement, item: ReviewItem): void {
-        const schedule = item.card.schedules[item.faceIndex];
-        const preview = this.snapshotPreview(schedule);
-
-        this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
-            () => this.handleAgain(item));
-        this.addResponseButton(actionsEl, 2, "OK", "ef-btn-good", "check",
-            this.previewLabel(preview, ReviewResponse.Again),
-            () => { void this.handleScheduledResponse(ReviewResponse.Again, item); });
     }
 
     private renderCramButtons(actionsEl: HTMLElement, item: ReviewItem): void {
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
-            () => this.handleAgain(item));
+            () => this.handleCramAgain(item));
         // "Got it", not "Easy": Cram never writes a schedule (handleCramEasy),
         // and "Easy" reads as a grade the card did not receive.
         this.addResponseButton(actionsEl, 2, "Got it", "ef-btn-easy", "check", null,
@@ -349,15 +341,9 @@ export class ReviewModal extends Modal {
         this.addKey(String(keyNum), onClick);
     }
 
-    private handleAgain(item: ReviewItem): void {
-        if (!this.revealed) return;
-        this.revealed = false;
-
-        if (this.mode !== "Cram") {
-            this.againItems.add(item);
-        }
-
-        // Reshuffle the item back into the remaining queue at a random position
+    // Reshuffle a face back into the remaining queue at a random position. Under
+    // B2 this is pure drill: the write, if any, has already happened.
+    private reshuffle(item: ReviewItem): void {
         const remaining = this.queue.length - (this.idx + 1);
         if (remaining > 0) {
             const insertAt = this.idx + 1 + Math.floor(Math.random() * remaining);
@@ -365,23 +351,44 @@ export class ReviewModal extends Modal {
         } else {
             this.queue.push(item);
         }
+    }
 
+    // Cram's Again: never writes, in any circumstance, and never has.
+    private handleCramAgain(item: ReviewItem): void {
+        if (!this.revealed) return;
+        this.revealed = false;
+        this.reshuffle(item);
         this.idx++;
         this.renderCard();
     }
 
+    // B2's rating contract. The first answer on a face writes — Again included —
+    // and nothing else in the session does.
     private async handleScheduledResponse(response: ReviewResponse, item: ReviewItem): Promise<void> {
         if (!this.revealed) return;
         this.revealed = false;
 
-        // Written from the snapshot the buttons were rendered from, falling back
-        // to a fresh computation only if no preview was taken (Cram never renders
-        // scheduled responses, so in practice the snapshot is always present).
-        const preview = this.pendingPreview ?? previewAll(
-            item.card.schedules[item.faceIndex], this.plugin, globalDateProvider.now,
-        );
+        if (!this.writtenItems.has(item)) {
+            // Written from the snapshot the buttons were rendered from, so the
+            // interval shown and the interval stored cannot disagree.
+            const preview = this.pendingPreview ?? previewAll(
+                item.card.schedules[item.faceIndex], this.plugin, globalDateProvider.now,
+            );
+            await this.writeSchedule(item, preview[ratingFor(response)]);
+            // Only after the write actually succeeded: a throw leaves the face
+            // unmarked so a later answer can still persist it.
+            this.writtenItems.add(item);
+        }
         this.pendingPreview = null;
-        await this.writeSchedule(item, preview[ratingFor(response)]);
+
+        // Again keeps the face in the session as drill and does not count as
+        // reviewed; the card comes back and any later answer writes nothing.
+        if (response === ReviewResponse.Again) {
+            this.reshuffle(item);
+            this.idx++;
+            this.renderCard();
+            return;
+        }
 
         this.reviewed++;
         this.idx++;

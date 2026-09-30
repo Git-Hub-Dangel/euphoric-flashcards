@@ -161,6 +161,17 @@ export interface ScheduleInfo {
     last_review: Date | null;
 }
 
+// A face with no schedule at all, or one still carrying State.New, is new.
+//
+// Both spellings occur: the comment parser returns null for a dummy-dated
+// segment, while a stored segment could carry State.New explicitly. Anything
+// ranking faces must treat the two identically — get_retrievability returns
+// exactly 0 for State.New, which is the most urgent slot in an ascending sort
+// (plan P4.2b).
+export function isFaceNew(schedule: ScheduleInfo | null): boolean {
+    return schedule === null || schedule.state === State.New;
+}
+
 // Whole days between two instants, floored, matching ts-fsrs's own date_diff.
 // Floored rather than rounded so "same day" is 0 and a card is never credited
 // with elapsed time it has not had.

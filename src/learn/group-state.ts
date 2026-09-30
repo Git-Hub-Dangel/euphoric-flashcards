@@ -1,5 +1,6 @@
 import type { ParsedCard } from "src/parsing";
 import { ReviewResponse } from "src/scheduling/review-response";
+import { isFaceNew } from "src/scheduling/fsrs";
 import { reinsertWithMinLag } from "src/utils/queue";
 import { LEARN_AGAIN_MIN_LAG } from "src/learn/constants";
 import type { CardLocation } from "src/learn/pool";
@@ -66,7 +67,15 @@ export function buildInitialQueue(
 export function makeInitialStates(group: CardLocation[]): Map<ParsedCard, GroupCardState> {
     const out = new Map<ParsedCard, GroupCardState>();
     for (const loc of group) {
-        const wasNew = loc.card.schedules[0] === null || loc.card.schedules[1] === null;
+        // P4.8: wasNew is State.New (or no schedule), matching classifyPools'
+        // newCards predicate exactly — the two must not drift apart.
+        //
+        // Kept as the primary fragility signal alongside againCount. Deliberately
+        // NOT replaced by `difficulty`: the sentence planner exists for
+        // session-local consolidation, so "was new when this session started" and
+        // "failed during this session" are the right inputs. FSRS difficulty is a
+        // long-run property of the card and would answer a different question.
+        const wasNew = isFaceNew(loc.card.schedules[0]) || isFaceNew(loc.card.schedules[1]);
         out.set(loc.card, {
             againCount: 0,
             lastAgainSeq: -1,
@@ -146,9 +155,28 @@ function stateFor(map: Map<ParsedCard, GroupCardState>, card: ParsedCard): Group
     return st;
 }
 
-// ReviewResponse enum encodes quality: Easy=0, Good=1, Hard=2, Again=3.
-// The "worst" recorded response is the largest enum value seen so far.
+// Quality rank, worst-first: the "worst" recorded response is the highest rank
+// seen so far.
+//
+// ⚠️ This table exists so the ordering stops depending on ReviewResponse's
+// numeric values. It used to be a bare `next > prev`, which was correct only
+// because the enum happens to run Easy=0 .. Again=3 — and FSRS's Rating runs the
+// other way (Again=1 .. Easy=4) while agreeing on Hard=2. Under a bare numeric
+// comparison, swapping the enum or reordering its members would invert three of
+// four values and leave Hard working, which is exactly the kind of silent
+// inversion §C3 warns about. Pinned by group-state.test.ts.
+const QUALITY_RANK: Record<ReviewResponse, number> = {
+    [ReviewResponse.Easy]: 0,
+    [ReviewResponse.Good]: 1,
+    [ReviewResponse.Hard]: 2,
+    [ReviewResponse.Again]: 3,
+};
+
+export function isWorseThan(next: ReviewResponse, prev: ReviewResponse): boolean {
+    return QUALITY_RANK[next] > QUALITY_RANK[prev];
+}
+
 function worstOf(prev: ReviewResponse | null, next: ReviewResponse): ReviewResponse {
     if (prev === null) return next;
-    return next > prev ? next : prev;
+    return isWorseThan(next, prev) ? next : prev;
 }

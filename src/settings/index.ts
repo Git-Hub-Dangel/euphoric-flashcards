@@ -34,9 +34,6 @@ export interface EuphoricSettings {
     // Lower means longer intervals and more forgetting. Maps to the FSRS
     // parameter `request_retention`; the weights `w` are never user-editable.
     requestRetention: number;
-    baseEase: number;
-    defaultIntervalChange: number;
-    lapsesIntervalChange: number;
     loadBalance: boolean;
     maximumInterval: number;
     startOfDay: string;
@@ -71,9 +68,6 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     rootDeckTags: [],
 
     requestRetention: 0.9,
-    baseEase: 250,
-    defaultIntervalChange: 1.2,
-    lapsesIntervalChange: 0.01,
     loadBalance: true,
     maximumInterval: 365,
     startOfDay: "00:00:00",

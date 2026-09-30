@@ -13,15 +13,18 @@ import {
 import type { PluginData } from "src/persistence/plugin-data";
 
 // A data.json as a 1.4.1 install would have written it: no dataVersion, plus
-// the three keys Phase 1 retires. Shaped loosely because that is how it arrives
-// off disk — the whole point of the migration is that the saved object does not
-// match the current interface.
+// every key the migration chain retires — `easyBonus` in v2, the three SM-2
+// tuning knobs in v4. Shaped loosely because that is how it arrives off disk:
+// the whole point of the migration is that the saved object does not match the
+// current interface.
 function legacyData(): Record<string, unknown> {
     return {
         settings: {
             ...DEFAULT_SETTINGS,
             easyBonus: 1.45,
             baseEase: 270,
+            defaultIntervalChange: 1.2,
+            lapsesIntervalChange: 0.01,
             maximumInterval: 180,
         },
         buryDate: "2026-09-20",
@@ -54,13 +57,34 @@ describe("migratePluginData", () => {
         expect("easyBonus" in settings).toBe(false);
     });
 
+    // v3 -> v4. These three lost their last consumer when osr.ts was deleted;
+    // Object.assign would otherwise copy them through from disk forever.
+    it("deletes the three SM-2 tuning knobs", () => {
+        const data = legacyData() as unknown as PluginData;
+        migratePluginData(data);
+        const settings = data.settings as unknown as Record<string, unknown>;
+        expect("baseEase" in settings).toBe(false);
+        expect("defaultIntervalChange" in settings).toBe(false);
+        expect("lapsesIntervalChange" in settings).toBe(false);
+    });
+
+    it("deletes the SM-2 knobs even when migrating only the last step", () => {
+        const data = legacyData() as unknown as PluginData;
+        (data as unknown as Record<string, unknown>)["dataVersion"] = 3;
+        expect(migratePluginData(data)).toBe(3);
+        const settings = data.settings as unknown as Record<string, unknown>;
+        expect("baseEase" in settings).toBe(false);
+        // ...while a key an earlier step owns is left as it was found, because
+        // that step did not run.
+        expect("easyBonus" in settings).toBe(true);
+    });
+
     // The exit criterion that matters most: a real install must not lose
     // anything it still uses.
     it("loses no live key or value", () => {
         const data = legacyData() as unknown as PluginData;
         migratePluginData(data);
 
-        expect(data.settings.baseEase).toBe(270);
         expect(data.settings.maximumInterval).toBe(180);
         expect(data.settings.loadBalance).toBe(DEFAULT_SETTINGS.loadBalance);
         expect(data.expandedDecks).toEqual(["Spanish", "Spanish/verbs"]);

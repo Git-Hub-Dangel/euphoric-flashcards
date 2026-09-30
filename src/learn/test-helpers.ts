@@ -5,7 +5,10 @@ import type { ScheduleInfo } from "src/scheduling/fsrs";
 import { State } from "src/scheduling/fsrs";
 import { TICKS_PER_DAY } from "src/scheduling/constants";
 import { parsePreferredDate, startOfDay } from "src/scheduling/dates";
-import type { CardLocation } from "src/learn/pool";
+import type { CardLocation, RetrievabilityFn } from "src/learn/pool";
+import { FsrsEngine, toCard } from "src/scheduling/fsrs";
+import { DEFAULT_SETTINGS } from "src/settings";
+import type { EuphoricSettings } from "src/settings";
 
 let counter = 0;
 
@@ -80,4 +83,13 @@ export function makeCard(
         } satisfies ParsedCard,
         filePath: opts.filePath ?? "file.md",
     };
+}
+
+// The retrievability function classifyPools needs, backed by the real FSRS
+// engine. Deliberately not a stub: the whole risk P4.2 guards against is a
+// reversed comparison, and a hand-rolled monotonic fake would satisfy a reversed
+// sort just as happily as a correct one.
+export function retrievabilityFn(settings: EuphoricSettings = DEFAULT_SETTINGS): RetrievabilityFn {
+    const engine = new FsrsEngine(settings);
+    return (schedule, now) => engine.retrievability(toCard(schedule, now), now);
 }

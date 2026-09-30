@@ -294,9 +294,6 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             const d = DEFAULT_SETTINGS;
                             const cur = this.plugin.data.settings;
                             cur.requestRetention = d.requestRetention;
-                            cur.baseEase = d.baseEase;
-                            cur.defaultIntervalChange = d.defaultIntervalChange;
-                            cur.lapsesIntervalChange = d.lapsesIntervalChange;
                             cur.maximumInterval = d.maximumInterval;
                             cur.loadBalance = d.loadBalance;
                             cur.startOfDay = d.startOfDay;
@@ -326,21 +323,6 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             max: REQUEST_RETENTION_MAX,
                             step: REQUEST_RETENTION_STEP,
                         },
-                    },
-                    {
-                        name: "Base ease",
-                        desc: "Default ease factor for new cards.",
-                        control: { type: "slider", key: "baseEase", min: 100, max: 400, step: 10 },
-                    },
-                    {
-                        name: "Okay interval change",
-                        desc: "Interval multiplier applied to cards reviewed as 'Okay'",
-                        control: { type: "slider", key: "defaultIntervalChange", min: 1.0, max: 1.8, step: 0.05 },
-                    },
-                    {
-                        name: "Lapse interval change",
-                        desc: "Interval multiplier applied to cards reviewed as 'Okay' after they were reshuffled into the session due to being toggled as 'Again'. The default value resets the card's progress completely.",
-                        control: { type: "slider", key: "lapsesIntervalChange", min: 0.01, max: 1.0, step: 0.01 },
                     },
                     {
                         name: "Maximum interval",

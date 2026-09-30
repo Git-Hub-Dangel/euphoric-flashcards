@@ -9,7 +9,7 @@ import { ratingFor, scheduledDays } from "src/scheduling/fsrs";
 import type { GradeRecord, ScheduleInfo } from "src/scheduling/fsrs";
 import type { DeckNode } from "src/decks";
 import { globalDateProvider } from "src/scheduling/dates";
-import { previewAll } from "src/scheduling/session-helpers";
+import { previewAll, retrievabilityOf } from "src/scheduling/session-helpers";
 import { loadCardsForDeck, writeCardBack } from "src/ui/review/load-cards";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { addCloseButton, applyAnimationDuration, fadeOutThen, isTextEntryEvent, preventBgTapDismiss, staggerIn, trackKeyboard } from "src/ui/modal-utils";
@@ -18,7 +18,7 @@ import { writeGradedResponse, shiftLocationsForDelta } from "src/ui/shared/write
 import { classifyPools } from "src/learn/pool";
 import { LearnSession } from "src/learn/session";
 import type { LearnItem } from "src/learn/group-state";
-import type { WriteIntent } from "src/learn/session";
+import type { FaceAnswer, WriteIntent } from "src/learn/session";
 import type { SentenceWordSelection } from "src/learn/sentence-planner";
 import { buildConstructionConstraintPool } from "src/ui/shared/construction-constraints";
 import { commitDeposit, createSentenceSurface, drawSentence, readDeposit, redrawSentence } from "src/ui/shared/sentence-renderer";
@@ -134,7 +134,11 @@ export class LearnModal extends Modal {
         this.constraintPool = buildConstructionConstraintPool(s, this.options.selectionDeckTag);
 
         const today = globalDateProvider.today;
-        const pools = classifyPools(cards, today);
+        const pools = classifyPools(
+            cards,
+            today,
+            (schedule, at) => retrievabilityOf(schedule, this.plugin, at),
+        );
         this.session = new LearnSession(pools, {
             groupLimit: this.options.groupLimit,
             wordCount: s.conjureSentencesWordCount,
@@ -194,13 +198,16 @@ export class LearnModal extends Modal {
             return;
         }
         if (step.kind === "face") {
-            this.renderFace(step.item, step.isPostAgain);
+            // step.isPostAgain is no longer threaded into the UI: under B2 the
+            // re-drill renders exactly like a first pass, minus the previews,
+            // and willWrite() already answers that question.
+            this.renderFace(step.item);
         } else {
             this.renderSentence(step.words);
         }
     }
 
-    private renderFace(item: LearnItem, isPostAgain: boolean): void {
+    private renderFace(item: LearnItem): void {
         if (!this.bodyEl || !this.footerEl) return;
         this.clearKeymap();
         this.revealed = false;
@@ -251,7 +258,7 @@ export class LearnModal extends Modal {
             answerEl.removeClass("ef-hidden");
             staggerIn(answerEl, 0);
             showBtn.remove();
-            this.renderFaceActions(item, isPostAgain, face.schedule);
+            this.renderFaceActions(item, face.schedule);
         };
         showBtn.addEventListener("click", doReveal);
         this.addKey(" ", doReveal);
@@ -260,27 +267,21 @@ export class LearnModal extends Modal {
         this.firstRender = false;
     }
 
-    private renderFaceActions(item: LearnItem, isPostAgain: boolean, schedule: ScheduleInfo | null): void {
-        if (!this.footerEl) return;
+    // B2: the same three buttons on every face, first pass and re-drill alike.
+    // The post-Again "OK" surface is gone — Again already wrote, so the re-drill
+    // is pure drill and shows three bare buttons with no previews.
+    private renderFaceActions(item: LearnItem, schedule: ScheduleInfo | null): void {
+        if (!this.footerEl || !this.session) return;
         const settings = this.plugin.data.settings;
-        // Interval previews only make sense when the answer will actually be
-        // written — B2's rule, and already true here before FSRS.
-        const showInterval = settings.showIntervalOnButtons && item.writeEligible;
+        // The preview rule: render an interval if and only if a write will occur.
+        const showInterval = settings.showIntervalOnButtons && this.session.willWrite(item);
         const preview = previewAll(schedule, this.plugin, globalDateProvider.now);
         this.pendingPreview = preview;
         const label = (response: ReviewResponse): string | null =>
             showInterval ? textInterval(scheduledDays(preview[ratingFor(response)]), true) : null;
 
-        if (isPostAgain) {
-            this.addResponseButton(this.footerEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
-                () => { void this.handleFaceAnswer(item, "Again"); });
-            this.addResponseButton(this.footerEl, 2, "OK", "ef-btn-good", "check",
-                label(ReviewResponse.Again),
-                () => { void this.handleFaceAnswer(item, "OK"); });
-            return;
-        }
-
-        this.addResponseButton(this.footerEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
+        this.addResponseButton(this.footerEl, 1, "Again", "ef-btn-again", "rotate-ccw",
+            label(ReviewResponse.Again),
             () => { void this.handleFaceAnswer(item, "Again"); });
         this.addResponseButton(this.footerEl, 2, "Okay", "ef-btn-okay", "activity",
             label(ReviewResponse.Hard),
@@ -305,7 +306,7 @@ export class LearnModal extends Modal {
         this.addKey(String(keyNum), onClick);
     }
 
-    private async handleFaceAnswer(item: LearnItem, answer: "Again" | "Okay" | "Good" | "OK"): Promise<void> {
+    private async handleFaceAnswer(item: LearnItem, answer: FaceAnswer): Promise<void> {
         if (!this.session) return;
         if (!this.revealed) return;
         this.revealed = false;
@@ -332,17 +333,13 @@ export class LearnModal extends Modal {
         this.renderStep();
     }
 
-    // Both intents now resolve through the same FSRS snapshot the buttons were
-    // rendered from. `reset` (the post-Again OK) becomes a genuine Rating.Again:
-    // its old SM-2 behaviour multiplied the interval by lapsesIntervalChange,
-    // which has no FSRS equivalent — B2 has FSRS's stability floor supply lapse
-    // severity instead. P4.5 deletes the intent kind altogether.
+    // Resolved from the same FSRS snapshot the buttons were rendered from, so the
+    // interval shown and the interval written cannot disagree.
     private computeScheduleFor(item: LearnItem, intent: WriteIntent): ScheduleInfo {
-        const response = intent.kind === "reset" ? ReviewResponse.Again : intent.response;
         const preview = this.pendingPreview ?? previewAll(
             item.card.schedules[item.faceIndex], this.plugin, globalDateProvider.now,
         );
-        return preview[ratingFor(response)];
+        return preview[ratingFor(intent.response)];
     }
 
     private renderSentence(words: SentenceWordSelection[]): void {

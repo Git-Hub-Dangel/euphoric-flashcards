@@ -6,7 +6,7 @@ import type { HistogramState } from "src/scheduling/histogram-store";
 // removed. Every removal needs a step in STEPS: `Object.assign` in loadData_
 // copies unknown saved keys through verbatim, so a key deleted from the
 // interface survives in data.json forever unless a migration deletes it.
-export const CURRENT_DATA_VERSION = 3;
+export const CURRENT_DATA_VERSION = 4;
 
 export interface ExplorerState {
     mode: ReviewMode;
@@ -69,9 +69,24 @@ function stepV2ToV3(data: MutableData): void {
     if (!usable) settings["requestRetention"] = DEFAULT_SETTINGS.requestRetention;
 }
 
+// v3 -> v4: retire the last three SM-2 tuning knobs. All three lost their only
+// consumer when Phase 3 deleted osr.ts — `baseEase` seeded a new card's ease,
+// `defaultIntervalChange` scaled an Okay, and `lapsesIntervalChange` collapsed a
+// lapsed card's interval. FSRS derives all three from stability and difficulty,
+// and B2 explicitly replaces the third with FSRS's stability floor. Their sliders
+// went with them; without this step they would sit in data.json forever.
+function stepV3ToV4(data: MutableData): void {
+    deleteKeys(data["settings"] as MutableData | undefined, [
+        "baseEase",
+        "defaultIntervalChange",
+        "lapsesIntervalChange",
+    ]);
+}
+
 const STEPS: Record<number, (data: MutableData) => void> = {
     1: stepV1ToV2,
     2: stepV2ToV3,
+    3: stepV3ToV4,
 };
 
 // Runs every step between the saved version and CURRENT_DATA_VERSION, in order,
