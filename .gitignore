@@ -33,8 +33,11 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
-# Reference
+# Reference — upstream clones kept for reading only, never imported from.
+# Both names are listed so a rename of the checkout cannot silently start
+# tracking ~233 third-party files.
 /ts-fsrs
+/reference_only_ts-fsrs
 
 # AI
 .claude/

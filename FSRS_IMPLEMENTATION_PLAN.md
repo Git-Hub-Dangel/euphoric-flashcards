@@ -219,6 +219,7 @@ Verified free of scheduling coupling. If a diff touches these, something has gon
 | P3.7 | Fix the mechanical fallout across `card-parser.ts`, `write-schedule.ts`, `histogram-store.ts`, `deck-tree.ts`. `withUpdatedSchedules`' `baseEase` parameter becomes vestigial — remove it | various |
 | P3.8 | Shrink `dates.ts`: `moment` leaves the scheduling core. Keep multi-format legacy date parsing **only** where Phase 5's converter will need it | `src/scheduling/dates.ts` |
 | P3.9 | Rewrite `comment-parser.test.ts`, `card-parser.test.ts`, and the affected `decks.test.ts` fixture. Add the `deck-tree` due/new regression test from C3 | tests |
+| P3.10 | **Correct the `maximumInterval` setting description.** Verified in Phase 2: `maximum_interval` is a *soft* ceiling under `LongTermScheduler`. `next_interval` clamps each grade to it and **then** enforces `again < hard < good < easy` by bumping each past the previous, so once intervals saturate the grades land on `max`, `max+1`, `max+2`, `max+3`. With B2's three buttons the worst real overshoot is `Good = max+2`. Do **not** clamp this away — flattening it destroys the ordering the interval previews depend on. But the row currently reads "Cards will not be scheduled beyond this many days", which is true under SM-2 and becomes false the moment FSRS owns scheduling. Reword it in the same commit that wires FSRS in. Pinned by `fsrs.test.ts` → "documents the saturated overshoot exactly" | `settings-tab.ts` |
 
 **Exit criteria.**
 - `npm test` green, `tsc` clean.

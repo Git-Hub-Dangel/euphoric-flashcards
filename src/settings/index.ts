@@ -7,6 +7,13 @@ export type LearnSentenceSide = "Default" | "Front" | "Back";
 export type ReviewMode = "Review" | "Cram" | "ConjureSentences" | "Learn";
 export type WordSelection = "Random" | "Optimised";
 
+// Bounds for the FSRS `request_retention` slider. Declared here rather than in
+// src/scheduling/fsrs.ts so the settings tab and the data migration can both
+// reach them without importing the engine (and with it, ts-fsrs).
+export const REQUEST_RETENTION_MIN = 0.7;
+export const REQUEST_RETENTION_MAX = 0.99;
+export const REQUEST_RETENTION_STEP = 0.01;
+
 export interface TypeConfig {
     key: string;
     label: string;
@@ -23,6 +30,10 @@ export interface EuphoricSettings {
     rootDeckTags: string[];
 
     // Scheduling
+    // FSRS: the target probability of recall at the moment a card comes due.
+    // Lower means longer intervals and more forgetting. Maps to the FSRS
+    // parameter `request_retention`; the weights `w` are never user-editable.
+    requestRetention: number;
     baseEase: number;
     defaultIntervalChange: number;
     lapsesIntervalChange: number;
@@ -59,6 +70,7 @@ export interface EuphoricSettings {
 export const DEFAULT_SETTINGS: EuphoricSettings = {
     rootDeckTags: [],
 
+    requestRetention: 0.9,
     baseEase: 250,
     defaultIntervalChange: 1.2,
     lapsesIntervalChange: 0.01,

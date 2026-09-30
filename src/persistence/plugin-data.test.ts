@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS } from "src/settings";
+import {
+    DEFAULT_SETTINGS,
+    REQUEST_RETENTION_MAX,
+    REQUEST_RETENTION_MIN,
+} from "src/settings";
 import {
     CURRENT_DATA_VERSION,
     DEFAULT_DATA,
@@ -122,6 +126,78 @@ describe("migratePluginData", () => {
     });
 
     it("tolerates a missing settings object", () => {
+        const data = { expandedDecks: [] } as unknown as PluginData;
+        expect(() => migratePluginData(data)).not.toThrow();
+        expect(data.dataVersion).toBe(CURRENT_DATA_VERSION);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// v2 -> v3: seed the FSRS request_retention setting
+// ---------------------------------------------------------------------------
+
+describe("migratePluginData — requestRetention seeding", () => {
+    function v2Data(requestRetention?: unknown): PluginData {
+        const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+        delete settings["requestRetention"];
+        if (arguments.length > 0) settings["requestRetention"] = requestRetention;
+        return {
+            dataVersion: 2,
+            settings,
+            expandedDecks: [],
+            explorerState: null,
+            histogram: { data: {}, builtAt: null },
+        } as unknown as PluginData;
+    }
+
+    it("seeds the default when the key is absent", () => {
+        const data = v2Data();
+        expect(migratePluginData(data)).toBe(2);
+        expect(data.settings.requestRetention).toBe(DEFAULT_SETTINGS.requestRetention);
+    });
+
+    it("preserves a valid stored value", () => {
+        const data = v2Data(0.82);
+        migratePluginData(data);
+        expect(data.settings.requestRetention).toBe(0.82);
+    });
+
+    it.each([
+        ["null", null],
+        ["a string", "0.9"],
+        ["NaN", NaN],
+        ["Infinity", Infinity],
+        ["below the slider range", 0.2],
+        ["above the slider range", 1.5],
+    ])("replaces an unusable value (%s) with the default", (_label, stored) => {
+        const data = v2Data(stored);
+        migratePluginData(data);
+        expect(data.settings.requestRetention).toBe(DEFAULT_SETTINGS.requestRetention);
+    });
+
+    it("accepts the exact slider bounds", () => {
+        for (const bound of [REQUEST_RETENTION_MIN, REQUEST_RETENTION_MAX]) {
+            const data = v2Data(bound);
+            migratePluginData(data);
+            expect(data.settings.requestRetention).toBe(bound);
+        }
+    });
+
+    // A 1.4.1 install has to cross both steps in one load.
+    it("carries a v1 install through both steps in order", () => {
+        const data = legacyData() as unknown as Record<string, unknown>;
+        delete (data["settings"] as Record<string, unknown>)["requestRetention"];
+        const typed = data as unknown as PluginData;
+        expect(migratePluginData(typed)).toBe(1);
+        expect(typed.dataVersion).toBe(CURRENT_DATA_VERSION);
+        // v1->v2 deletions happened...
+        expect("buryDate" in data).toBe(false);
+        expect("easyBonus" in (data["settings"] as object)).toBe(false);
+        // ...and v2->v3 seeding happened.
+        expect(typed.settings.requestRetention).toBe(DEFAULT_SETTINGS.requestRetention);
+    });
+
+    it("tolerates a missing settings object at v2", () => {
         const data = { expandedDecks: [] } as unknown as PluginData;
         expect(() => migratePluginData(data)).not.toThrow();
         expect(data.dataVersion).toBe(CURRENT_DATA_VERSION);

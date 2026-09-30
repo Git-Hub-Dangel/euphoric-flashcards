@@ -2,7 +2,12 @@ import { App, PluginSettingTab, Setting } from "obsidian";
 import type { SettingDefinitionItem, TFile } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { ConstructionConstraintCollection, TypeConfig } from "src/settings/index";
-import { DEFAULT_SETTINGS } from "src/settings/index";
+import {
+    DEFAULT_SETTINGS,
+    REQUEST_RETENTION_MAX,
+    REQUEST_RETENTION_MIN,
+    REQUEST_RETENTION_STEP,
+} from "src/settings/index";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
     private readonly plugin: EuphoricFlashcardsPlugin;
@@ -288,6 +293,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         action: (): void => {
                             const d = DEFAULT_SETTINGS;
                             const cur = this.plugin.data.settings;
+                            cur.requestRetention = d.requestRetention;
                             cur.baseEase = d.baseEase;
                             cur.defaultIntervalChange = d.defaultIntervalChange;
                             cur.lapsesIntervalChange = d.lapsesIntervalChange;
@@ -296,6 +302,29 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             cur.startOfDay = d.startOfDay;
                             void this.plugin.saveData_();
                             this.update();
+                        },
+                    },
+                    {
+                        name: "Reset FSRS parameters to defaults",
+                        desc: "Restores the target retention and maximum interval to their shipped values. The FSRS model weights themselves are always the algorithm's published defaults — they are not stored, not editable, and not affected by this button.",
+                        action: (): void => {
+                            const d = DEFAULT_SETTINGS;
+                            const cur = this.plugin.data.settings;
+                            cur.requestRetention = d.requestRetention;
+                            cur.maximumInterval = d.maximumInterval;
+                            void this.plugin.saveData_();
+                            this.update();
+                        },
+                    },
+                    {
+                        name: "Target retention",
+                        desc: "The probability of recall FSRS aims for at the moment a card comes due. 0.90 means you should remember about 90% of cards when they appear. Lower values mean longer intervals and less reviewing, at the cost of more forgetting.",
+                        control: {
+                            type: "slider",
+                            key: "requestRetention",
+                            min: REQUEST_RETENTION_MIN,
+                            max: REQUEST_RETENTION_MAX,
+                            step: REQUEST_RETENTION_STEP,
                         },
                     },
                     {

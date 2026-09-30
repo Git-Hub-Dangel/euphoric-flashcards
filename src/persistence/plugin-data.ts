@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS } from "src/settings";
+import { DEFAULT_SETTINGS, REQUEST_RETENTION_MAX, REQUEST_RETENTION_MIN } from "src/settings";
 import type { CardSide, EuphoricSettings, ReviewMode, WordSelection } from "src/settings";
 import type { HistogramState } from "src/scheduling/histogram-store";
 
@@ -6,7 +6,7 @@ import type { HistogramState } from "src/scheduling/histogram-store";
 // removed. Every removal needs a step in STEPS: `Object.assign` in loadData_
 // copies unknown saved keys through verbatim, so a key deleted from the
 // interface survives in data.json forever unless a migration deletes it.
-export const CURRENT_DATA_VERSION = 2;
+export const CURRENT_DATA_VERSION = 3;
 
 export interface ExplorerState {
     mode: ReviewMode;
@@ -49,8 +49,29 @@ function stepV1ToV2(data: MutableData): void {
     deleteKeys(data["settings"] as MutableData | undefined, ["easyBonus"]);
 }
 
+// v2 -> v3: seed the FSRS `requestRetention` setting.
+//
+// loadData_'s `Object.assign({}, DEFAULT_SETTINGS, saved.settings)` already
+// supplies the default when the key is simply absent, so this step exists for
+// the case that spread cannot fix: a key that is *present but unusable* — null,
+// a string, NaN, or a number a hand-edited data.json put outside the slider's
+// range. Left alone, such a value reaches generatorParameters and would skew or
+// throw inside the scheduler at review time.
+function stepV2ToV3(data: MutableData): void {
+    const settings = data["settings"] as MutableData | undefined;
+    if (settings === undefined || settings === null) return;
+    const stored = settings["requestRetention"];
+    const usable =
+        typeof stored === "number" &&
+        Number.isFinite(stored) &&
+        stored >= REQUEST_RETENTION_MIN &&
+        stored <= REQUEST_RETENTION_MAX;
+    if (!usable) settings["requestRetention"] = DEFAULT_SETTINGS.requestRetention;
+}
+
 const STEPS: Record<number, (data: MutableData) => void> = {
     1: stepV1ToV2,
+    2: stepV2ToV3,
 };
 
 // Runs every step between the saved version and CURRENT_DATA_VERSION, in order,

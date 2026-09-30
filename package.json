@@ -26,5 +26,8 @@
         "typescript": "^5.7.0",
         "vite-tsconfig-paths": "^6.1.1",
         "vitest": "^3.0.0"
+    },
+    "dependencies": {
+        "ts-fsrs": "5.4.2"
     }
 }

@@ -1,0 +1,427 @@
+import { describe, expect, it } from "vitest";
+
+import { DEFAULT_SETTINGS, REQUEST_RETENTION_MAX, REQUEST_RETENTION_MIN } from "src/settings";
+import type { EuphoricSettings } from "src/settings";
+import {
+    buildFsrsParameters,
+    emptyCard,
+    FSRS_GRADES,
+    FsrsEngine,
+    fsrsDefaultWeights,
+    Rating,
+    State,
+} from "src/scheduling/fsrs";
+import type { Card, Grade } from "src/scheduling/fsrs";
+
+const NOW = new Date("2026-01-15T10:00:00Z");
+
+function settings(overrides: Partial<EuphoricSettings> = {}): EuphoricSettings {
+    return { ...DEFAULT_SETTINGS, ...overrides };
+}
+
+function engine(overrides: Partial<EuphoricSettings> = {}): FsrsEngine {
+    return new FsrsEngine(settings(overrides));
+}
+
+function addDays(d: Date, days: number): Date {
+    return new Date(d.valueOf() + days * 24 * 60 * 60 * 1000);
+}
+
+// ---------------------------------------------------------------------------
+// Parameter construction (§B1)
+// ---------------------------------------------------------------------------
+
+describe("buildFsrsParameters — locked parameters", () => {
+    it("hardcodes the four non-negotiable parameters", () => {
+        const p = buildFsrsParameters(settings());
+        expect(p.enable_short_term).toBe(false);
+        expect(p.enable_fuzz).toBe(false);
+        expect(p.learning_steps).toEqual([]);
+        expect(p.relearning_steps).toEqual([]);
+    });
+
+    it("takes request_retention from settings", () => {
+        expect(buildFsrsParameters(settings({ requestRetention: 0.85 })).request_retention).toBe(0.85);
+    });
+
+    it("maps maximum_interval 1:1 from the existing maximumInterval setting", () => {
+        expect(buildFsrsParameters(settings({ maximumInterval: 365 })).maximum_interval).toBe(365);
+        expect(buildFsrsParameters(settings({ maximumInterval: 36525 })).maximum_interval).toBe(36525);
+    });
+
+    it("uses the library's default weights, unmodified", () => {
+        expect([...buildFsrsParameters(settings()).w]).toEqual([...fsrsDefaultWeights()]);
+    });
+
+    it("defaults request_retention to 0.9", () => {
+        expect(DEFAULT_SETTINGS.requestRetention).toBe(0.9);
+    });
+});
+
+describe("buildFsrsParameters — defensive clamping", () => {
+    // A hand-edited data.json must not reach the scheduler with a value that
+    // skews or throws.
+    it.each([
+        ["below range", 0.1, REQUEST_RETENTION_MIN],
+        ["above range", 1.5, REQUEST_RETENTION_MAX],
+        ["exactly min", REQUEST_RETENTION_MIN, REQUEST_RETENTION_MIN],
+        ["exactly max", REQUEST_RETENTION_MAX, REQUEST_RETENTION_MAX],
+    ])("clamps a request_retention %s", (_label, input, expected) => {
+        expect(buildFsrsParameters(settings({ requestRetention: input })).request_retention).toBe(
+            expected,
+        );
+    });
+
+    it("falls back to the minimum for a non-finite request_retention", () => {
+        expect(buildFsrsParameters(settings({ requestRetention: NaN })).request_retention).toBe(
+            REQUEST_RETENTION_MIN,
+        );
+    });
+
+    it("never produces a maximum_interval below 1", () => {
+        expect(buildFsrsParameters(settings({ maximumInterval: 0 })).maximum_interval).toBe(1);
+        expect(buildFsrsParameters(settings({ maximumInterval: -10 })).maximum_interval).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// emptyCard
+// ---------------------------------------------------------------------------
+
+describe("emptyCard", () => {
+    it("is a New card with no history", () => {
+        const c = emptyCard(NOW);
+        expect(c.state).toBe(State.New);
+        expect(c.stability).toBe(0);
+        expect(c.difficulty).toBe(0);
+        expect(c.reps).toBe(0);
+        expect(c.lapses).toBe(0);
+        expect(c.last_review).toBeUndefined();
+        expect(c.due.valueOf()).toBe(NOW.valueOf());
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The four ratings
+// ---------------------------------------------------------------------------
+
+describe("FSRS_GRADES", () => {
+    it("is the four real grades in ascending quality, excluding Manual", () => {
+        expect(FSRS_GRADES).toEqual([Rating.Again, Rating.Hard, Rating.Good, Rating.Easy]);
+        expect(FSRS_GRADES).not.toContain(Rating.Manual);
+    });
+});
+
+describe("FsrsEngine.schedule — the four ratings from a New card", () => {
+    const e = engine();
+    const base = emptyCard(NOW);
+
+    it("produces a strictly increasing interval from Again to Easy", () => {
+        const days = FSRS_GRADES.map((g) => e.schedule(base, g, NOW).scheduled_days);
+        expect(days).toEqual([...days].sort((a, b) => a - b));
+        expect(new Set(days).size).toBe(4);
+        // Pin the shipped numbers so a weight or parameter change is visible in
+        // the diff rather than silently rescheduling every user's cards.
+        expect(days).toEqual([1, 2, 3, 8]);
+    });
+
+    it("produces strictly increasing stability from Again to Easy", () => {
+        const s = FSRS_GRADES.map((g) => e.schedule(base, g, NOW).stability);
+        expect(s).toEqual([...s].sort((a, b) => a - b));
+    });
+
+    it("produces decreasing difficulty as the grade improves", () => {
+        const d = FSRS_GRADES.map((g) => e.schedule(base, g, NOW).difficulty);
+        expect(d).toEqual([...d].sort((a, b) => b - a));
+    });
+
+    it("counts one rep for every grade", () => {
+        for (const g of FSRS_GRADES) expect(e.schedule(base, g, NOW).reps).toBe(1);
+    });
+
+    it("sets last_review to the review instant", () => {
+        for (const g of FSRS_GRADES) {
+            expect(e.schedule(base, g, NOW).last_review?.valueOf()).toBe(NOW.valueOf());
+        }
+    });
+
+    // FSRS does not count failing a New card as a lapse — a lapse is the loss of
+    // something previously learned. Phase 4's "Again increments lapses" check
+    // must therefore run against a Review card, not a fresh one.
+    it("does not count a lapse for Again on a New card, but does on a learned one", () => {
+        expect(e.schedule(base, Rating.Again, NOW).lapses).toBe(0);
+        const learned = e.schedule(base, Rating.Good, NOW);
+        expect(e.schedule(learned, Rating.Again, addDays(NOW, 3)).lapses).toBe(1);
+    });
+
+    // maximum_interval is a soft ceiling, not a hard one. LongTermScheduler
+    // clamps each grade's interval to maximum_interval and *then* enforces
+    // again < hard < good < easy by bumping each one past the previous, so once
+    // the intervals saturate the higher grades step over the ceiling: Again
+    // lands on it, Hard on +1, Good on +2, Easy on +3. We do not correct this —
+    // flattening it would destroy the ordering the interval previews rely on.
+    const MAX_INTERVAL_OVERSHOOT = 3;
+
+    it("keeps Again at or below maximum_interval", () => {
+        const capped = new FsrsEngine(settings({ maximumInterval: 5 }));
+        let card = emptyCard(NOW);
+        let t = NOW;
+        for (let i = 0; i < 25; i++) {
+            card = capped.schedule(card, Rating.Again, t);
+            expect(card.scheduled_days).toBeLessThanOrEqual(5);
+            t = new Date(card.due);
+        }
+    });
+
+    it("keeps every grade within maximum_interval + 3", () => {
+        const capped = new FsrsEngine(settings({ maximumInterval: 5 }));
+        for (const g of FSRS_GRADES) {
+            let card = emptyCard(NOW);
+            let t = NOW;
+            for (let i = 0; i < 25; i++) {
+                card = capped.schedule(card, g, t);
+                expect(card.scheduled_days).toBeLessThanOrEqual(5 + MAX_INTERVAL_OVERSHOOT);
+                t = new Date(card.due);
+            }
+        }
+    });
+
+    // Pinned deliberately: if a future ts-fsrs changes how the ceiling and the
+    // ordering interact, this is the test that says so out loud.
+    it("documents the saturated overshoot exactly", () => {
+        const capped = new FsrsEngine(settings({ maximumInterval: 5 }));
+        // Drive stability high enough that all four grades saturate.
+        let card = emptyCard(NOW);
+        let t = NOW;
+        for (let i = 0; i < 10; i++) {
+            card = capped.schedule(card, Rating.Easy, t);
+            t = new Date(card.due);
+        }
+        const saturated = capped.previewAll(card, t);
+        expect(FSRS_GRADES.map((g) => saturated[g].scheduled_days)).toEqual([5, 6, 7, 8]);
+    });
+
+    it("lowers the interval when target retention is raised", () => {
+        const lax = new FsrsEngine(settings({ requestRetention: 0.75 }));
+        const strict = new FsrsEngine(settings({ requestRetention: 0.95 }));
+        const seed = emptyCard(NOW);
+        const laxCard = lax.schedule(lax.schedule(seed, Rating.Good, NOW), Rating.Good, addDays(NOW, 3));
+        const strictCard = strict.schedule(
+            strict.schedule(seed, Rating.Good, NOW),
+            Rating.Good,
+            addDays(NOW, 3),
+        );
+        expect(strictCard.scheduled_days).toBeLessThan(laxCard.scheduled_days);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// previewAll
+// ---------------------------------------------------------------------------
+
+describe("FsrsEngine.previewAll", () => {
+    const e = engine();
+
+    it("returns an entry for each of the four grades", () => {
+        const p = e.previewAll(emptyCard(NOW), NOW);
+        for (const g of FSRS_GRADES) expect(p[g]).toBeDefined();
+        expect(Object.keys(p)).toHaveLength(4);
+    });
+
+    // The whole point of the seam: the previewed interval and the written
+    // interval must not be able to disagree.
+    it("agrees exactly with schedule() for every grade", () => {
+        const card = e.schedule(emptyCard(NOW), Rating.Good, NOW);
+        const later = addDays(NOW, 5);
+        const p = e.previewAll(card, later);
+        for (const g of FSRS_GRADES) {
+            expect(p[g]).toEqual(e.schedule(card, g, later));
+        }
+    });
+
+    it("does not mutate the card it previews", () => {
+        const card = emptyCard(NOW);
+        const before = JSON.stringify(card);
+        e.previewAll(card, NOW);
+        expect(JSON.stringify(card)).toBe(before);
+    });
+
+    it("works on a New card and on a Review card alike", () => {
+        const fresh = e.previewAll(emptyCard(NOW), NOW);
+        const reviewed = e.previewAll(e.schedule(emptyCard(NOW), Rating.Good, NOW), addDays(NOW, 3));
+        for (const g of FSRS_GRADES) {
+            expect(fresh[g].scheduled_days).toBeGreaterThanOrEqual(1);
+            expect(reviewed[g].scheduled_days).toBeGreaterThanOrEqual(1);
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// retrievability
+// ---------------------------------------------------------------------------
+
+describe("FsrsEngine.retrievability", () => {
+    const e = engine();
+
+    // Load-bearing for the Learn due ranking (plan P4.2 / P4.2b): New cards
+    // score 0, which is the *most urgent* end of an ascending sort. Anything
+    // that feeds New faces into that ranking silently prioritises them.
+    it("returns exactly 0 for a New card", () => {
+        expect(e.retrievability(emptyCard(NOW), NOW)).toBe(0);
+    });
+
+    it("returns a value in [0, 1] for a reviewed card", () => {
+        const card = e.schedule(emptyCard(NOW), Rating.Good, NOW);
+        const r = e.retrievability(card, addDays(NOW, 1));
+        expect(r).toBeGreaterThan(0);
+        expect(r).toBeLessThanOrEqual(1);
+    });
+
+    it("decays monotonically as a card goes longer without review", () => {
+        const card = e.schedule(emptyCard(NOW), Rating.Good, NOW);
+        const samples = [0, 1, 2, 5, 10, 30, 100].map((d) =>
+            e.retrievability(card, addDays(NOW, d)),
+        );
+        for (let i = 1; i < samples.length; i++) {
+            expect(samples[i]!).toBeLessThanOrEqual(samples[i - 1]!);
+        }
+        expect(samples[samples.length - 1]!).toBeLessThan(samples[0]!);
+    });
+
+    it("scores a more stable card higher than a shakier one at the same elapsed time", () => {
+        const shaky = e.schedule(emptyCard(NOW), Rating.Hard, NOW);
+        const solid = e.schedule(emptyCard(NOW), Rating.Easy, NOW);
+        const at = addDays(NOW, 4);
+        expect(e.retrievability(solid, at)).toBeGreaterThan(e.retrievability(shaky, at));
+    });
+
+    // ts-fsrs floors elapsed time to whole days, and it measures from the
+    // last_review *instant*, not from a calendar boundary. Two reads inside the
+    // same 24-hour window after last_review therefore return the identical
+    // value, so cards reviewed in the same sitting tie in the Learn ranking and
+    // the difficulty tie-break is load-bearing, not incidental.
+    it("ties for any two instants within the same 24h window after last_review", () => {
+        // last_review is NOW = 10:00 on the 15th, so bucket 0 runs to 10:00 on
+        // the 16th — note that it straddles midnight.
+        const card = e.schedule(emptyCard(NOW), Rating.Good, NOW);
+        const justAfter = e.retrievability(card, new Date("2026-01-15T10:30:00Z"));
+        const pastMidnight = e.retrievability(card, new Date("2026-01-16T09:30:00Z"));
+        expect(pastMidnight).toBe(justAfter);
+
+        // Crossing the 24h mark from last_review does move it.
+        const nextBucket = e.retrievability(card, new Date("2026-01-16T10:30:00Z"));
+        expect(nextBucket).toBeLessThan(justAfter);
+    });
+
+    it("never exceeds 1 when a card is reviewed ahead of its due date", () => {
+        const card = e.schedule(emptyCard(NOW), Rating.Good, NOW);
+        expect(e.retrievability(card, NOW)).toBeLessThanOrEqual(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The enable_short_term: false contract (§B1)
+// ---------------------------------------------------------------------------
+
+describe("enable_short_term: false — the contract the rest of the plugin relies on", () => {
+    const e = engine();
+
+    // Exhaustive over a long mixed walk rather than a couple of spot checks:
+    // this is the guarantee that lets day granularity, textInterval and the
+    // seven-field comment format survive, so it is worth proving broadly.
+    function walk(grades: readonly Grade[], steps: number): Card[] {
+        const seen: Card[] = [];
+        let card = emptyCard(NOW);
+        let t = NOW;
+        for (let i = 0; i < steps; i++) {
+            const g = grades[i % grades.length]!;
+            card = e.schedule(card, g, t);
+            seen.push(card);
+            t = new Date(card.due);
+        }
+        return seen;
+    }
+
+    it("never yields State.Learning or State.Relearning", () => {
+        for (const card of walk(FSRS_GRADES, 400)) {
+            expect(card.state).not.toBe(State.Learning);
+            expect(card.state).not.toBe(State.Relearning);
+        }
+    });
+
+    it("puts every outcome from a New card into State.Review, Again included", () => {
+        const base = emptyCard(NOW);
+        for (const g of FSRS_GRADES) {
+            expect(e.schedule(base, g, NOW).state).toBe(State.Review);
+        }
+    });
+
+    it("never yields scheduled_days < 1", () => {
+        for (const card of walk(FSRS_GRADES, 400)) {
+            expect(card.scheduled_days).toBeGreaterThanOrEqual(1);
+        }
+    });
+
+    it("holds scheduled_days >= 1 through a long chain of consecutive Again", () => {
+        for (const card of walk([Rating.Again], 40)) {
+            expect(card.scheduled_days).toBeGreaterThanOrEqual(1);
+            expect(card.state).toBe(State.Review);
+        }
+    });
+
+    it("holds scheduled_days >= 1 when Again repeats at the same instant", () => {
+        let card = emptyCard(NOW);
+        for (let i = 0; i < 10; i++) {
+            card = e.schedule(card, Rating.Again, NOW);
+            expect(card.scheduled_days).toBeGreaterThanOrEqual(1);
+            expect(card.state).toBe(State.Review);
+        }
+    });
+
+    it("keeps learning_steps at 0, so the field never needs persisting", () => {
+        for (const card of walk(FSRS_GRADES, 60)) {
+            expect(card.learning_steps).toBe(0);
+        }
+    });
+
+    it("floors stability rather than collapsing it to zero on repeated failure", () => {
+        const chain = walk([Rating.Again], 40);
+        const last = chain[chain.length - 1]!;
+        expect(last.stability).toBeGreaterThan(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// enable_fuzz: false
+// ---------------------------------------------------------------------------
+
+describe("enable_fuzz: false — the histogram is the only jitter source", () => {
+    it("is deterministic: identical inputs give identical output", () => {
+        const card = emptyCard(NOW);
+        for (const g of FSRS_GRADES) {
+            const runs = Array.from({ length: 8 }, () => engine().schedule(card, g, NOW));
+            for (const r of runs) expect(r).toEqual(runs[0]);
+        }
+    });
+
+    it("is deterministic across a long walk", () => {
+        const run = (): number[] => {
+            const e = engine();
+            let card = emptyCard(NOW);
+            let t = NOW;
+            const days: number[] = [];
+            for (let i = 0; i < 50; i++) {
+                card = e.schedule(card, FSRS_GRADES[i % 4]!, t);
+                days.push(card.scheduled_days);
+                t = new Date(card.due);
+            }
+            return days;
+        };
+        expect(run()).toEqual(run());
+    });
+
+    it("exposes no enable_fuzz control anywhere in settings", () => {
+        expect("enableFuzz" in DEFAULT_SETTINGS).toBe(false);
+        expect("enable_fuzz" in DEFAULT_SETTINGS).toBe(false);
+    });
+});
