@@ -33,11 +33,13 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
+# Reference
+/ts-fsrs
+
 # AI
 .claude/
 
 # Notes
 old_md_files/
-EF.md
-TEST.md
 feature_docs/
+EF.md
