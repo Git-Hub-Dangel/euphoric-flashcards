@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { SettingDefinitionItem, TFile } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { ConstructionConstraintCollection, TypeConfig } from "src/settings/index";
@@ -8,9 +8,13 @@ import {
     REQUEST_RETENTION_MIN,
     REQUEST_RETENTION_STEP,
 } from "src/settings/index";
+import { describeReport, runConversion } from "src/migration/convert-vault";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
     private readonly plugin: EuphoricFlashcardsPlugin;
+    // Reentrancy guard for the one-time converter. It rewrites notes across the
+    // whole vault, so two overlapping runs must not be possible from one button.
+    private converting = false;
 
     constructor(app: App, plugin: EuphoricFlashcardsPlugin) {
         super(app, plugin);
@@ -407,6 +411,50 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                 ],
             },
+
+            // Convert SM-2 cards (FSRS plan P5.3). Last group in the tab.
+            {
+                type: "group",
+                heading: "Convert SM-2 cards",
+                items: [
+                    {
+                        name: "Convert vault to FSRS",
+                        desc: "Rewrites every pre-FSRS card in the vault to the FSRS format. Cards already in the FSRS format are left alone, so running this twice changes nothing.",
+                        action: (): void => { void this.runConverter(); },
+                    },
+                ],
+            },
         ];
+    }
+
+    // The one-time SM-2 to FSRS conversion (plan §B5).
+    //
+    // A dry run goes first, so a vault with nothing to convert reports that and
+    // writes nothing. It is not a confirmation step: this button converts on the
+    // first click, by design for now.
+    //
+    // The histogram is rebuilt afterwards (§P5.6) because every converted card
+    // has just gained a due date the old scan could not read.
+    private async runConverter(): Promise<void> {
+        if (this.converting) return;
+        this.converting = true;
+        try {
+            const dryRun = await runConversion(this.app.vault, { write: false });
+            if (dryRun.commentsConverted === 0) {
+                new Notice(describeReport(dryRun, true));
+                return;
+            }
+
+            const report = await runConversion(this.app.vault, { write: true });
+            await this.plugin.histogramStore.rebuild(this.app.vault);
+            await this.plugin.saveData_();
+            new Notice(describeReport(report, false));
+        } catch (err) {
+            console.error("EuphoricFlashcards: conversion failed", err);
+            new Notice("Conversion failed. See the developer console.");
+        } finally {
+            this.converting = false;
+            this.update();
+        }
     }
 }

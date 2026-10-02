@@ -2,15 +2,15 @@
 
 Companion to `FSRS_IMPLEMENTATION_PLAN.md`. That file holds the work to do; this one records what is done, what was learned doing it, and what the next agent must not re-derive. The plan still wins on intent; this file wins on current state.
 
-**Status: Phases 1–4 complete. Phase 5 is next.**
+**Status: Phases 1–5 complete. Phase 6 (`startOfDay`) is next, then Phase 7 (closing scan).**
 
-| | Baseline | After P1 | After P2 | After P3 | After P4 |
-|---|---|---|---|---|---|
-| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | 284 / 14 | **302 / 14** |
-| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean | clean |
-| `npm run build` | clean | clean | clean | clean | clean |
-| `main.js` | 125,913 B | 126,681 B | 128,473 B | 191,203 B | **190,465 B** |
-| `dataVersion` | — | 2 | 3 | 3 | **4** |
+| | Baseline | After P1 | After P2 | After P3 | After P4 | After P5 |
+|---|---|---|---|---|---|---|
+| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | 284 / 14 | 302 / 14 | **373 / 17** |
+| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean | clean | clean |
+| `npm run build` | clean | clean | clean | clean | clean | clean |
+| `main.js` | 125,913 B | 126,681 B | 128,473 B | 191,203 B | 190,465 B | **199,498 B** |
+| `dataVersion` | — | 2 | 3 | 3 | 4 | **4** |
 
 The `main.js` jump of **+62,730 B** is ts-fsrs entering the bundle for the first
 time, and it lands within 2 KB of the 60,929 B the Phase 2 probe predicted. Phase
@@ -145,7 +145,7 @@ Corrected in P1.7 and kept current through Phase 2. Version was already `1.4.1`,
 - **The settings-tab order was wrong in four ways.** There is no "Review" group (`showIntervalOnButtons`/`showKeybindingsOnDesktop` are in Appearance); Appearance is **last**, below Load Balancing, not above; it has three controls, not one; `defaultCardSide` has no settings row at all. Actual order: Resources → Decks → Card Types → Learn → Conjure Sentences → Construction Constraints → Scheduling → Load Balancing → Appearance.
 - Test counts, the `easyBonus` formula in §4, the `PluginData` shape and both migration steps in §7, `learnGroupsPerSession` 1–10 → 1–5, `startOfDay`'s inert status, the `Reset` enum member, `fsrs.ts` and `plugin-data.ts` in §2, the Cram label, and §8's first-runtime-dependency note with the exact-pin rationale and the `Date.prototype` disclosure.
 
-Still outstanding, by design: **§0 and §10 both still say FSRS was rejected.** That is P7.9's job, not Phase 1's.
+**Resolved ahead of P7.9.** §0 and §10 were rewritten and now state that FSRS ships; `FSRS_MIGRATION.md` was archived into the gitignored `old_md_files/`. P7.9's remaining job is the stale-passage list below, not the rejection text. Invariant 10 was also corrected on 2026-10-02: it claimed load balancing was "fully wired end-to-end", which contradicted §4.8: it is bookkeeping only until P5.1.
 
 ### Newly stale after Phase 3 — all for P7.9
 
@@ -336,7 +336,7 @@ window is strictly better.
 
 ## PHASE 4 — Behaviour: Learn engine, rating contract, UI ✅
 
-Uncommitted at time of writing.
+Committed as `16e4782`.
 
 - **P4.0** (added in Phase 3) `baseEase`, `defaultIntervalChange` and
   `lapsesIntervalChange` deleted: interface, defaults, three settings rows, three
@@ -392,7 +392,7 @@ Uncommitted at time of writing.
   circumstance; giving it its own handler means the shared path can write
   unconditionally on first answer without a mode test inside it.
 
-### ❓ Open question for the next agent — one unconfirmed pedagogical call
+### ✅ Resolved 2026-10-02 — the one unconfirmed pedagogical call
 
 **How should `difficulty` be aggregated across a card's two faces?** B3 fixes the
 sort *direction* (descending) and separately mandates min-across-faces for
@@ -401,13 +401,19 @@ mirroring the stability rule: one shaky direction is enough to promote a card.
 Pinned by `pool.test.ts` → "takes a card's difficulty from its hardest face, not
 its easiest".
 
-This was **not confirmed with the maintainer.** It matters for asymmetric cards,
+**Confirmed by the maintainer on 2026-10-02: keep max.** It matters for asymmetric cards,
 which are the norm in language decks where recognition and production diverge
 sharply — a word you recognise instantly but cannot produce ranks as hard under
-max-across-faces, and as middling under a mean. If the intended pedagogy is
-"rank on the face actually being drilled", this is the line to change (`pool.ts`,
-`maxSeenDifficulty`) and that one test with it. Everything else in the ranking is
-unaffected.
+max-across-faces, and as middling under a mean. The alternatives were a mean (asymmetry stops
+being a promotion signal) and ranking on the face actually being drilled. Max won as
+the deliberate mirror of the min-across-faces stability rule, and because
+under-drilled production is the failure mode that actually costs a language learner.
+
+**Do not revisit this without the maintainer.** `maxSeenDifficulty` in `pool.ts` and
+`pool.test.ts`'s "takes a card's difficulty from its hardest face" are the two places
+that encode it. Note also that difficulty only ever orders cards *within* a pool that
+`LEARN_MATURE_STABILITY` (21) and `LEARN_ANCHOR_MIN_STABILITY` (12) have already
+partitioned, so no difficulty rule can promote a young card into a mature slot.
 
 ### Findings from Phase 4
 
@@ -447,24 +453,217 @@ work, and both are described in the Debt section above:
 
 Do not ship any of Phases 3–4 without Phase 5: a pre-FSRS vault currently reads as
 cards that are neither new nor due.
+---
 
-Preconditions met. Read the **Debt** section above first: three of its items are
-Phase 4's opening moves.
+## Phase 5 prep — superseded by the Phase 5 section below
 
-The groundwork Phase 3 laid that P4 should build on rather than redo:
+> Kept for the reasoning it records, **not** for its current-state claims. The
+> "confirmed absent" list below was true before Phase 5 and is now false on every
+> line except the `setDayBoundary` one. Both decisions at the end are resolved.
 
-- `previewAll` already returns all four grades from one call, so **P4.7 is mostly
-  done** — what remains is B2's rule that a preview renders *iff* a write will
-  occur, which means the re-drill's three buttons show none.
-- `ratingFor` already exists and is exhaustively tested, so **P4.4**'s job is to
-  decide whether `ReviewResponse` survives at all, not to build the mapping.
-- The `difficulty`-descending tie-break and its sign tests already landed, so
-  **P4.2** is the retrievability ranking plus P4.2b's New-face assertion.
-- `pool.ts` still holds `minSeenStability` / `maxSeenDifficulty` / `overdueRatio`
-  and the `>= 21` / `>= 12` thresholds against `LEARN_MATURE_INTERVAL_DAYS` and
-  `LEARN_ANCHOR_MIN_INTERVAL_DAYS`, which **P4.1/P4.3 should rename** now that they
-  measure stability.
+Preconditions re-verified rather than assumed: `tsc --noEmit --skipLibCheck` clean,
+302/302 tests green across 14 files, working tree clean, Phase 4 committed as
+`16e4782`. P7.2's boundary grep already passes (`ts-fsrs` imported only by
+`src/scheduling/fsrs.ts`).
 
-Do not forget finding 4 when writing the P4 exit criterion: **`Again` on a
-`State.New` card gives `lapses: 0`**. Only a `State.Review` card increments, and
-`session-helpers.test.ts` now pins both halves of that.
+**What is confirmed absent**, so no one re-greps it:
+
+- `findLeastUsedIntervalOverRange` (`due-date-histogram.ts:34`) has **no caller**
+  outside `scheduling.test.ts`. `histogramFor` (`session-helpers.ts:23`) has no
+  non-test caller either. P5.1 is untouched.
+- `src/migration/` does not exist. P5.3–P5.7 are untouched.
+- `setDayBoundary` appears only in its own three declarations in `dates.ts` plus
+  `scheduling.test.ts:223`. Phase 6 is untouched.
+
+**The unit mismatch P5.1 has to resolve.** `DueDateHistogram` is keyed in
+**days-from-today** (`Map<number, number>`) and `findLeastUsedIntervalOverRange`
+takes and returns a day offset. FSRS hands back a `due: Date`. `HistogramStore` is
+keyed by **ISO date string**, and `toRelativeHistogram(today)` is the existing
+bridge between the two. So the re-point converts `due` to a day offset relative to
+`globalDateProvider.today`, scans, and converts back. The scan logic itself
+(nearest empty day, earlier-wins tie-break, strict-improvement-only) does not
+change, and the six tests at `scheduling.test.ts:74–124` remain its contract.
+
+**Where the jitter has to be applied.** `writeGradedResponse`
+(`ui/shared/write-schedule.ts`) is the single write funnel and already decrements
+the old `due` and increments the new one under `settings.loadBalance`. But it
+receives `newSchedule` **already chosen by the caller from the `previewAll`
+snapshot**, and invariant 37 requires the rendered interval and the written
+interval to come from that one snapshot. So **the jitter must not be applied inside
+`writeGradedResponse`** — that would store a date the button never showed. It
+belongs where the snapshot is taken, so the previews themselves show balanced
+dates. This is the one real design constraint in P5.1 and the plan text does not
+mention it.
+
+**Converter seeding is fully specified** by B5 and needs no invention:
+`stability = interval`, `difficulty` from a linear `ease [130,350] → [10,1]` map,
+`last_review = due − interval days`, `state = Review`, `reps = 0`, `lapses = 0`,
+no stability floor. Use `parseLegacyDate` (`dates.ts:50`), kept alive for exactly
+this. Write through `writeCardBack` so `fileCache` semantics hold, and emit through
+`buildScheduleComment` rather than hand-rolling the seven-field format.
+
+Note for P5.7's idempotency test: `parseSegment` rejects a legacy three-field
+segment via `f.length < FIELDS_PER_SEGMENT` (`comment-parser.ts:70`), so
+"already converted" is cheaply detectable as "parses to a non-null `ScheduleInfo`".
+
+### ✅ Both decisions resolved 2026-10-02
+
+1. **Where the converter is invoked from.** B5 says "a standalone, explicitly
+   invoked command", but EF.md §1 states only one command is registered
+   (`Euphoric Flashcards: Review`) and `src/main.ts:33` is the only `addCommand`
+   site. A second command contradicts §1; a settings button does not, and the
+   Scheduling group already has two precedent `action` rows
+   (`settings-tab.ts:291,305`). **Resolved: a settings button, last group in the
+   tab, no command, and no confirmation step for now.**
+2. **Whether the user-facing load-balancing copy is reworded now or at P5.1.**
+   `settings-tab.ts:356` and `:360` already describe the toggle as spreading cards
+   across nearby days, which was P5.1's behaviour and not that day's. **Resolved:
+   left alone, and P5.1 has now made the existing copy true.**
+
+---
+
+## PHASE 5 — Load balancing and the one-time converter ✅
+
+Uncommitted at time of writing. `dataVersion` is unchanged at 4: the converter
+rewrites note text, not `PluginData`.
+
+- **P5.1** Load balancing re-pointed at the FSRS `due: Date`. `balanceDue` and
+  `balanceAll` live in `session-helpers.ts`; `previewAll` and `applyResponse` both
+  balance. `histogramFor` gained an optional `today` parameter so the snapshot and
+  the offset arithmetic cannot use two different todays.
+- **P5.2** Nothing to do. `enable_fuzz: false` was already asserted three ways in
+  `fsrs.test.ts:401–431` (determinism over 8 repeats, determinism over a 50-step
+  walk, and absence from `DEFAULT_SETTINGS`).
+- **P5.3** `src/migration/legacy-sr.ts`, the self-contained legacy parser and the
+  B5 seeding rules. Obsidian-free.
+- **P5.4/P5.5** `src/migration/convert-vault.ts`. One walk, `write: false` for the
+  dry run and `write: true` to persist, through `vault.process`.
+- **P5.6** The histogram is rebuilt after a successful conversion.
+- **P5.7** 43 new tests across `legacy-sr.test.ts` (34) and `convert-vault.test.ts`
+  (9), plus 12 added to `session-helpers.test.ts` for P5.1.
+- **P5.8** (added) `test-deck.test.ts`, 16 tests reading the real pre-FSRS note at
+  `test_vault_files/Test Deck.md` off disk. This is the plan's real-vault exit
+  criterion, scaled to one file, and it found two things the hand-built fixtures
+  did not (findings 14 and 15).
+
+### Decisions taken in Phase 5
+
+- **Balancing happens at the `previewAll` snapshot, not in `writeGradedResponse`.**
+  This is the one real design constraint in P5.1 and the plan text does not mention
+  it. `writeGradedResponse` looks like the obvious home — it is the single write
+  funnel and already maintains the histogram counts — but it receives a
+  `newSchedule` the caller already picked from the snapshot it rendered buttons
+  from. Balancing there would store a date the button never showed, which is
+  exactly the drift invariant 37 exists to prevent. Balancing at the snapshot means
+  the previews themselves show the balanced days and both modals got it with no
+  changes at all.
+- **The fuzz ladder was transferred verbatim** from the deleted `osrSchedule`
+  (recovered from `36e5426:src/scheduling/osr.ts`), including the `interval > 7`
+  gate. A 1.4.1 user's spread behaviour is therefore unchanged; only the measured
+  quantity moved, from an SM-2 interval to the due date's day offset. Inventing a
+  new ladder would have been an unannounced behaviour change on top of a migration
+  that already changes every overdue card's interval.
+- **The balanced date is shifted by whole days, never rebuilt from midnight.**
+  `due` carries the review's time of day and `scheduledDays` floors
+  `last_review → due`, so a midnight rebuild shaves a day off the rendered interval
+  while the stored calendar date keeps the full one. Pinned by a test that asserts
+  the hours and minutes survive.
+- **The grade-ordering clamp in `balanceAll` is defensive, and was verified to be
+  defensive rather than assumed.** It looked like a live bug: a saturated card's
+  grades sit one day apart (§4.4) and the fuzz window reaches up to seven. It is
+  not reachable. Adjacent grades probe overlapping neighbourhoods, so any day empty
+  enough to pull a higher grade down is a day the lower grade's own scan would have
+  broken on first. 7M random histograms (sparse, and dense with varied counts to
+  exercise the min-tracking path) plus an exhaustive occupancy sweep around every
+  ladder boundary produced no crossing. The clamp stays because it is free and
+  because a later change to the ladder or the scan must not be able to reintroduce
+  the hazard silently. **The comment says defensive; do not rewrite it as a bug
+  fix.**
+- **The field count is the only legacy/FSRS discriminator.** B4 deliberately kept
+  the `<!--SR:` wrapper and both delimiters identical, so nothing else
+  distinguishes the formats. 3 fields is legacy, ≥7 is FSRS, anything else is
+  malformed and left untouched. A **mixed** comment (one face each way) cannot be
+  produced by either version of the plugin and is treated as damage rather than
+  half-converted in place.
+- **Conversion is a textual substitution, not a `parseCard` round trip.** Only the
+  inside of the comment changes, so a note's line count cannot change, none of the
+  `shiftLocationsForDelta` machinery is involved, and a card the parser would
+  reject for unrelated reasons still gets its schedule converted. This is why P5.5
+  does **not** go through `writeCardBack`: that path splices `ParsedCard` line
+  ranges and exists to keep a live review queue consistent, and the converter runs
+  outside any session with no `fileCache` to honour. `vault.process` is the atomic
+  read-modify-write and is what the converter uses instead.
+- **`last_review` rounds to whole days while `stability` keeps the fraction.** The
+  old writer rounded intervals to one decimal, so `interval = 1.5` is real.
+  Invariant 40 requires both stored dates to be calendar dates, so only the date
+  arithmetic rounds.
+- **The entry point is a settings button, by maintainer decision (2026-10-02).**
+  B5 said "a standalone, explicitly invoked command", but §1's single-command rule
+  stands and the Scheduling group already had two `action`-row precedents. It is
+  the last group in the tab. Per the same decision the button **converts on first
+  click with no confirmation**; the dry run that precedes it exists only so an
+  already-converted vault can report that without writing. Safeguards and final
+  copy are the maintainer's follow-up, not an oversight here.
+
+### Findings from Phase 5
+
+**12. The `interval > 7` gate is what protects short intervals, and it is load
+bearing for a reason that is easy to miss.** Under SM-2 an `Again` returned
+`interval = 0`; under FSRS `enable_short_term: false` guarantees
+`scheduled_days >= 1`. Either way a lapse lands inside the no-balance window, so
+the histogram never moves a card the user has just failed. Had the gate been
+dropped as an SM-2 artefact, load balancing would have started nudging lapse
+intervals by a day, which is a pedagogical change disguised as jitter.
+
+**13. The converter and the runtime parser agree because the converter emits
+through `buildScheduleComment`.** It would have been easy to hand-roll the
+seven-field string in `legacy-sr.ts`. Reusing the writer means the output format
+cannot drift from the reader, and the round-trip test (`parseScheduleComment` on a
+converted comment returns two real `State.Review` schedules, where the same call on
+the legacy comment returns `[null, null]`) is a genuine end-to-end check rather
+than a restatement of the converter's own formatting.
+
+**14. EF.md §4.10 was wrong about `New`, and the real note is what showed it.**
+The claim was that an unconverted vault reports both Due and New as `0`. Due is
+`0`; New is not, whenever a deck holds **multi-line** cards. The deck tree walks
+line by line, so every continuation line except the one directly above the SR
+comment is counted as a separate new card. The fixture's three multi-line cards
+report `new = 10` between them. This is invariant 9's documented approximation
+rather than a scheduling bug, conversion neither causes nor fixes it, and §4.10
+has been corrected. Pinned by a test that asserts the number **does not move**
+across conversion, and that the single-line `learn-test` decks do report `0`.
+
+**15. One real vault already contains a corrupted due date, and the lenient date
+parser is what saves it.** Line 32 of the fixture holds
+`<!--SR:!2026-09-26,3,250!2026-/09-24,1,250-->`, with a stray slash. It survives
+because `parseLegacyDate` falls through to the native `Date` constructor, which
+recovers Sep 24 2026. A stricter parser would return `null`, and **`null` is
+indistinguishable from the dummy date in `parseLegacySegment`**, so that face
+would have silently reset to New. That is data loss outside the documented
+`reps`/`lapses` loss, and nothing would have reported it. Pinned by name in
+`test-deck.test.ts`. If the date parsing is ever tightened, this is the case that
+decides whether a corrupt date must be counted as `malformed` instead of New.
+
+---
+
+## Next: PHASE 6 — `startOfDay`
+
+Preconditions met. Deferrable: nothing else depends on it.
+
+- `setDayBoundary` still has **zero production call sites** — only its three
+  declarations in `dates.ts` and one test at `scheduling.test.ts:223`.
+- `StaticDateProvider.today` still ignores the boundary (the NOTE in `dates.ts`
+  marks the spot), which is why the feature is currently untestable.
+- P5.1 added a second consumer of "today": `previewAll` passes
+  `globalDateProvider.today` to both `histogramFor` and the offset arithmetic. Once
+  the boundary is live, `today` stops being `startOfDay(now)` and those offsets
+  shift with it. That is correct, but it means **P6.3's reconciliation now covers
+  load balancing as well as `due.ts`**, and the `histogramFor`/`balanceAll` pairing
+  is the place to check it.
+
+Phase 7's scans were spot-checked while Phase 5 was in progress and currently pass:
+`ts-fsrs` is imported only by `src/scheduling/fsrs.ts` (P7.2), there are zero
+`.style.` writes in `src/` (P7.1), and every surviving mention of `ease` or `osr`
+outside `src/migration/` is in a comment describing the historical SM-2 concept
+(P7.3). P7.9's EF.md rewrite is largely done; §2, §4.8, §4.10/§4.11, §6, §8 and
+invariant 10 were all updated with Phase 5.
