@@ -2,15 +2,15 @@
 
 Companion to `FSRS_IMPLEMENTATION_PLAN.md`. That file holds the work to do; this one records what is done, what was learned doing it, and what the next agent must not re-derive. The plan still wins on intent; this file wins on current state.
 
-**Status: Phases 1–5 complete. Phase 6 (`startOfDay`) is next, then Phase 7 (closing scan).**
+**Status: Phases 1–6 complete. Phase 7 (closing scan) is next, and it is the last one.**
 
-| | Baseline | After P1 | After P2 | After P3 | After P4 | After P5 |
-|---|---|---|---|---|---|---|
-| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | 284 / 14 | 302 / 14 | **373 / 17** |
-| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean | clean | clean |
-| `npm run build` | clean | clean | clean | clean | clean | clean |
-| `main.js` | 125,913 B | 126,681 B | 128,473 B | 191,203 B | 190,465 B | **199,498 B** |
-| `dataVersion` | — | 2 | 3 | 3 | 4 | **4** |
+| | Baseline | After P1 | After P2 | After P3 | After P4 | After P5 | After P6 |
+|---|---|---|---|---|---|---|---|
+| Tests | 170 / 11 files | 183 / 12 | 237 / 13 | 284 / 14 | 302 / 14 | 373 / 17 | **405 / 18** |
+| `tsc --noEmit --skipLibCheck` | clean | clean | clean | clean | clean | clean | clean |
+| `npm run build` | clean | clean | clean | clean | clean | clean | clean |
+| `main.js` | 125,913 B | 126,681 B | 128,473 B | 191,203 B | 190,465 B | 199,498 B | **200,407 B** |
+| `dataVersion` | — | 2 | 3 | 3 | 4 | 4 | **4** |
 
 The `main.js` jump of **+62,730 B** is ts-fsrs entering the bundle for the first
 time, and it lands within 2 KB of the 60,929 B the Phase 2 probe predicted. Phase
@@ -524,7 +524,7 @@ segment via `f.length < FIELDS_PER_SEGMENT` (`comment-parser.ts:70`), so
 
 ## PHASE 5 — Load balancing and the one-time converter ✅
 
-Uncommitted at time of writing. `dataVersion` is unchanged at 4: the converter
+Committed as `8dd552f`. `dataVersion` is unchanged at 4: the converter
 rewrites note text, not `PluginData`.
 
 - **P5.1** Load balancing re-pointed at the FSRS `due: Date`. `balanceDue` and
@@ -646,24 +646,110 @@ decides whether a corrupt date must be counted as `malformed` instead of New.
 
 ---
 
-## Next: PHASE 6 — `startOfDay`
+## PHASE 6 — `startOfDay` ✅
 
-Preconditions met. Deferrable: nothing else depends on it.
+`dataVersion` unchanged at 4. No persisted shape changed: the boundary lives on
+the date provider and is derived from the setting that was already there.
 
-- `setDayBoundary` still has **zero production call sites** — only its three
-  declarations in `dates.ts` and one test at `scheduling.test.ts:223`.
-- `StaticDateProvider.today` still ignores the boundary (the NOTE in `dates.ts`
-  marks the spot), which is why the feature is currently untestable.
-- P5.1 added a second consumer of "today": `previewAll` passes
-  `globalDateProvider.today` to both `histogramFor` and the offset arithmetic. Once
-  the boundary is live, `today` stops being `startOfDay(now)` and those offsets
-  shift with it. That is correct, but it means **P6.3's reconciliation now covers
-  load balancing as well as `due.ts`**, and the `histogramFor`/`balanceAll` pairing
-  is the place to check it.
+- **P6.1** `applyDayBoundary(value)` in `dates.ts` is the single production
+  writer. Called from `main.ts` (after the data migration, before the histogram
+  rebuild, which is the first reader of `today`) and from the settings tab on
+  every `startOfDay` write plus "Restore Default Settings". An unparseable value
+  clears the boundary rather than throwing.
+- **P6.2** `dayFor(at, boundary)` is now the one resolver and both providers
+  delegate to it. `StaticDateProvider.today` honours the boundary, which is what
+  made the feature testable at all. `setupStaticDateProvider` carries the active
+  boundary across a provider swap.
+- **P6.3** Four reconciliations, the last two of which the plan did not name.
+  `isFaceDue` compares day against day. `classifyPools`'s `now` parameter was
+  renamed `today` (every production caller was already passing the session day,
+  only the name lied). The Explorer and Conjure Sentences now pass
+  `globalDateProvider.today` to `buildDeckTree` instead of a raw `new Date()`.
+  `balanceDue` takes `now` alongside `today`.
+- **P6.4** 32 new tests in `src/scheduling/day-boundary.test.ts`, plus the
+  placeholder in `scheduling.test.ts` flipped from asserting the gap to asserting
+  the behaviour. 373 to 405.
+- **P6.5** EF.md §4.12 is new, §6's "persisted and editable but inert" is gone,
+  invariant 42 is new, §2 and §8 carry the new counts, and §0 and §10 now read
+  "Phases 1-6".
 
-Phase 7's scans were spot-checked while Phase 5 was in progress and currently pass:
-`ts-fsrs` is imported only by `src/scheduling/fsrs.ts` (P7.2), there are zero
-`.style.` writes in `src/` (P7.1), and every surviving mention of `ease` or `osr`
-outside `src/migration/` is in a comment describing the historical SM-2 concept
-(P7.3). P7.9's EF.md rewrite is largely done; §2, §4.8, §4.10/§4.11, §6, §8 and
-invariant 10 were all updated with Phase 5.
+### Decisions taken in Phase 6
+
+- **`isFaceDue` became day-granular rather than keeping its instant comparison.**
+  This is the decision the whole phase turns on. An instant comparison against a
+  raw clock cannot honour a boundary at all, because the thing the boundary moves
+  is the session *day*. Under the default `00:00:00` the two forms give the same
+  answer for every reachable input (stored due dates are calendar dates at local
+  midnight per invariant 40, and `enable_short_term: false` guarantees
+  `scheduled_days >= 1`, so a same-day due date can never be produced), which is
+  why the whole suite stayed green on the change. The old comment in `due.ts`
+  anticipated that the boundary would shift `now`; it does not, and could not.
+  Only `today` shifts.
+- **`now` and `today` were separated in load balancing instead of papering over
+  the one-day skew.** The histogram is keyed in days from the session day, so the
+  scan offset must be measured from `today`. The no-balance gate and the fuzz
+  width describe the interval the user is shown on the button, which is measured
+  from the clock. Before the cutoff those differ by exactly one day. Taking the
+  offset for both (the pre-Phase-6 shape) would widen the fuzz window a rung
+  early and would let a 7-day interval past the gate that finding 12 exists to
+  protect. `balanceDue(due, histogram, today, now = today)` defaults to the old
+  behaviour, so all eight pre-existing `balanceDue` tests and both call sites keep
+  their exact arithmetic. **The default is not laziness, it is the proof that
+  Phase 6 changed nothing for a default install.**
+- **The ladder test had to be moved off the 21-day rung to mean anything.**
+  `fuzzFor(21)` and `fuzzFor(22)` are both `1`, so a test built on that rung
+  passes whether the width is read from the interval or the offset. The rung where
+  the ladder actually changes is 180 (`3`) to 181 (`4`), and the test asserts both
+  directions there: the interval-width window leaves the card alone and the
+  offset-width window moves it.
+- **The Explorer deck-count fix was found by looking, not by a failing test.**
+  Both `buildDeckTree` call sites passed `new Date()`. With a boundary set, a
+  deck's Due column would have counted a card due today while the Review queue
+  built from `globalDateProvider.today` still, correctly, refused to serve it. The
+  modals are outside vitest's coverage scope, so nothing would have caught it.
+- **A `00:00:00` boundary is a no-op by construction, so the old explicit
+  zero-check was dropped.** No instant precedes its own day's start, so the
+  general path already returns plain local midnight. Pinned by a test rather than
+  left as a claim.
+
+### Findings from Phase 6
+
+**16. The boundary is a silent-failure class of its own, which is why it earned an
+invariant.** `today` and `now` are the same calendar day for every user who never
+touches the setting, so a call site that takes the wrong one passes every test, on
+every default install, and misbehaves only for the users who configured the
+feature. That is the exact shape of a §C3 landmine, and it arrived with the
+feature rather than being inherited. Invariant 42 states which of the two each
+kind of consumer must take.
+
+**17. `classifyPools` was already receiving the session day under the name
+`now`.** Every production caller passed `globalDateProvider.today`, and
+`retrievability(s, now)` was therefore already being measured at the day's start
+rather than at the review instant. The rename makes that visible. It also means a
+pre-cutoff Learn session measures retrievability from the *previous* midnight,
+which is correct under the session-day model (invariant 40 has FSRS measuring
+elapsed time in whole calendar days anyway) but is worth knowing before reading
+a retrievability number that looks a day stale.
+
+---
+
+## Next: PHASE 7 — Closing scan
+
+The last phase. No new functionality.
+
+- P7.1, P7.2 and P7.3 pass as of this phase. No new `.style.` writes, no new
+  `ts-fsrs` importer (`src/scheduling/fsrs.ts` is still the only one), and the
+  surviving `ease`/`osr` mentions outside `src/migration/` are still only comments
+  describing the historical SM-2 concept.
+- P7.5's delta against the 170 baseline is now **+235**, across P1 (+13), P2
+  (+54), P3 (+47), P4 (+18), P5 (+71) and P6 (+32).
+- P7.6: `main.js` is 200,407 B.
+- P7.9's EF.md rewrite is nearly closed out. §0, §4, §6, §8, §10 and the invariant
+  list were all updated through Phases 5 and 6; what remains is the stale-passage
+  sweep listed above, not any rewrite of the FSRS-was-rejected text.
+- **P7.7 is the real remaining work: the manual desktop and iOS pass.** Nothing in
+  the suite exercises a modal, so Review, Cram, Learn (face and sentence steps),
+  Conjure Sentences, the Explorer, edit-card and the deposit bar have to be walked
+  by hand on both platforms. Worth doing with `startOfDay` set to something like
+  `04:00:00` at least once, since Phase 6 touched the deck counts and both due
+  queues.

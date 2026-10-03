@@ -1,6 +1,7 @@
 import { App, Modal, setIcon } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { buildDeckTree } from "src/decks";
+import { globalDateProvider } from "src/scheduling/dates";
 import type { DeckNode, FileLines } from "src/decks";
 import { ReviewModal } from "src/ui/review/index";
 import { ConjureSentencesModal } from "src/ui/conjure-sentences/index";
@@ -87,7 +88,10 @@ export class ExplorerModal extends Modal {
             }))
         );
 
-        const tree = buildDeckTree(fileLines, { rootTags, today: new Date() });
+        // The session day, not a raw clock reading. A card due today must not
+        // appear in the deck counts before the startOfDay boundary has passed
+        // while the Review queue is still hiding it (P6.3).
+        const tree = buildDeckTree(fileLines, { rootTags, today: globalDateProvider.today });
         const hasAnyCards = [...tree.values()].some(n => n.stats.total > 0);
 
         this.contentEl.empty();

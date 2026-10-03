@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS } from "src/settings";
 import { EuphoricSettingsTab } from "src/settings/settings-tab";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { HistogramStore } from "src/scheduling/histogram-store";
+import { applyDayBoundary } from "src/scheduling/dates";
 import { CURRENT_DATA_VERSION, DEFAULT_DATA, migratePluginData } from "src/persistence/plugin-data";
 import type { PluginData } from "src/persistence/plugin-data";
 
@@ -27,6 +28,11 @@ export default class EuphoricFlashcardsPlugin extends Plugin {
             }
 
             this.histogramStore = new HistogramStore(this.data.histogram);
+
+            // Must run before anything reads globalDateProvider.today (P6.1).
+            // The histogram rebuild below is the first such reader, and every
+            // due-date comparison in the plugin is downstream of it.
+            applyDayBoundary(this.data.settings.startOfDay);
 
             this.addSettingTab(new EuphoricSettingsTab(this.app, this));
 

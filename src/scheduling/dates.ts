@@ -78,6 +78,26 @@ export interface IDateProvider {
     setDayBoundary(dayBoundary: IDayBoundary | null): void;
 }
 
+// The session day that `at` belongs to under `b` (FSRS plan P6.2). Before the
+// boundary time the session is still the previous calendar day, which is the
+// entire point of the setting. A review at 02:00 under a 04:00 boundary belongs
+// to yesterday, so yesterday's cards stay due and today's stay hidden.
+//
+// A null boundary and a literal 00:00:00 both collapse to plain local midnight
+// by construction, since no instant precedes its own day's start.
+export function dayFor(at: Date, b: IDayBoundary | null): Date {
+    const dayStart = startOfDay(at);
+    if (b === null) return dayStart;
+    const boundary = new Date(
+        at.getFullYear(), at.getMonth(), at.getDate(),
+        b.hour, b.minute, b.second, 0,
+    );
+    if (at.valueOf() < boundary.valueOf()) {
+        return new Date(dayStart.valueOf() - TICKS_PER_DAY);
+    }
+    return dayStart;
+}
+
 export class LiveDateProvider implements IDateProvider {
     private dayBoundary: IDayBoundary | null = null;
 
@@ -86,18 +106,7 @@ export class LiveDateProvider implements IDateProvider {
     }
 
     get today(): Date {
-        const nowTime = new Date();
-        const b = this.dayBoundary;
-        if (b && !(b.hour === 0 && b.minute === 0 && b.second === 0)) {
-            const boundary = new Date(
-                nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate(),
-                b.hour, b.minute, b.second, 0,
-            );
-            if (nowTime.valueOf() < boundary.valueOf()) {
-                return new Date(startOfDay(nowTime).valueOf() - TICKS_PER_DAY);
-            }
-        }
-        return startOfDay(nowTime);
+        return dayFor(new Date(), this.dayBoundary);
     }
 
     getDayBoundary(): IDayBoundary | null {
@@ -121,11 +130,11 @@ export class StaticDateProvider implements IDateProvider {
         return new Date(this.d.valueOf());
     }
 
-    // NOTE: like the pre-FSRS implementation, this ignores dayBoundary. Phase 6
-    // (P6.2) makes it honour the boundary, which is what finally makes the
-    // startOfDay setting testable.
+    // Honours the boundary exactly as LiveDateProvider does (P6.2). It did not
+    // before, which is what made the setting untestable and is why the feature
+    // shipped inert for so long.
     get today(): Date {
-        return startOfDay(this.d);
+        return dayFor(this.d, this.dayBoundary);
     }
 
     static fromDateStr(str: string): StaticDateProvider {
@@ -167,5 +176,18 @@ export const LEGACY_DATE_FORMATS: readonly string[] = ALLOWED_DATE_FORMATS;
 export let globalDateProvider: IDateProvider = new LiveDateProvider();
 
 export function setupStaticDateProvider(dateStr: string): void {
+    const boundary = globalDateProvider.getDayBoundary();
     globalDateProvider = StaticDateProvider.fromDateStr(dateStr);
+    globalDateProvider.setDayBoundary(boundary);
+}
+
+// Push settings.startOfDay into the active provider (P6.1). This is the only
+// writer of the day boundary in production, called once at load and again on
+// every settings change so a slider-free text field takes effect immediately.
+//
+// An unparseable value clears the boundary instead of throwing, so a half-typed
+// field or a hand-edited data.json degrades to literal midnight rather than
+// breaking every due-date comparison in the plugin.
+export function applyDayBoundary(startOfDayValue: string): void {
+    globalDateProvider.setDayBoundary(DateUtil.strToDayBoundary(startOfDayValue));
 }

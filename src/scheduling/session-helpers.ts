@@ -56,10 +56,24 @@ function fuzzFor(offset: number): number {
 // carries the review's time of day and `scheduledDays` floors last_review -> due,
 // so snapping to midnight would shave a day off the interval rendered on the
 // button while the stored calendar date kept the full one.
-export function balanceDue(due: Date, histogram: DueDateHistogram, today: Date): Date {
+// `now` separates two quantities that are the same number until a startOfDay
+// boundary is set (P6.3). The histogram is keyed in days from the session day,
+// so the scan must use that offset. The no-balance gate and the fuzz width are
+// properties of the interval the button shows the user, which is measured from
+// the actual clock. Before the cutoff the session day is yesterday, so the two
+// differ by one day, and reading the offset as the interval would widen the fuzz
+// window a notch early and let a 7-day interval through the gate. It defaults to
+// `today`, which is the no-boundary case and leaves the arithmetic untouched.
+export function balanceDue(
+    due: Date,
+    histogram: DueDateHistogram,
+    today: Date,
+    now: Date = today,
+): Date {
     const offset = dayOffset(due, today);
-    if (offset <= BALANCE_MIN_OFFSET) return due;
-    const balanced = histogram.findLeastUsedIntervalOverRange(offset, fuzzFor(offset));
+    const interval = offset - dayOffset(now, today);
+    if (interval <= BALANCE_MIN_OFFSET) return due;
+    const balanced = histogram.findLeastUsedIntervalOverRange(offset, fuzzFor(interval));
     const delta = balanced - offset;
     if (delta === 0) return due;
     return new Date(due.valueOf() + delta * TICKS_PER_DAY);
@@ -82,12 +96,13 @@ function balanceAll(
     record: GradeRecord<ScheduleInfo>,
     histogram: DueDateHistogram,
     today: Date,
+    now: Date,
 ): GradeRecord<ScheduleInfo> {
     let floor = -Infinity;
     // FSRS_GRADES is ascending in quality, so this walks Again -> Easy.
     for (const grade of FSRS_GRADES) {
         const s = record[grade];
-        let due = balanceDue(s.due, histogram, today);
+        let due = balanceDue(s.due, histogram, today, now);
         let offset = dayOffset(due, today);
         if (offset < floor) {
             due = new Date(due.valueOf() + (floor - offset) * TICKS_PER_DAY);
@@ -126,8 +141,12 @@ export function previewAll(
     // its button previews from this record and then writes the very entry it
     // rendered, so balancing the due date at write time instead would store a
     // day the button never showed. One histogram snapshot serves all four grades.
+    //
+    // `today` is the session day and `now` the instant being reviewed. They sit
+    // on the same calendar day unless a startOfDay boundary is set, and the
+    // histogram snapshot and the offsets must both come from the former.
     const today = globalDateProvider.today;
-    return balanceAll(out, histogramFor(plugin, today), today);
+    return balanceAll(out, histogramFor(plugin, today), today, now);
 }
 
 // The schedule a single response would produce. Kept for callers that have no
@@ -144,7 +163,7 @@ export function applyResponse(
     // Balanced too, so this can never become the one path that writes an
     // unbalanced date. It sees a single grade, so there is no ordering to repair.
     const today = globalDateProvider.today;
-    return { ...out, due: balanceDue(out.due, histogramFor(plugin, today), today) };
+    return { ...out, due: balanceDue(out.due, histogramFor(plugin, today), today, now) };
 }
 
 // Probability of recalling this face right now, in [0, 1]. A face with no

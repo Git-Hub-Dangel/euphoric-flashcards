@@ -24,11 +24,11 @@ export interface LearnPools {
     matureAnchors: AnchorLocation[];
 }
 
-// Probability of recalling one face right now, in [0, 1]. Injected rather than
-// constructed here so this module stays pure ranking logic: the modal supplies a
-// closure over the live FSRS engine, and tests supply the real engine too (a
-// stubbed curve would let a sign error through).
-export type RetrievabilityFn = (schedule: ScheduleInfo, now: Date) => number;
+// Probability of recalling one face, in [0, 1], measured at the instant passed.
+// Injected rather than constructed here so this module stays pure ranking logic:
+// the modal supplies a closure over the live FSRS engine, and tests supply the
+// real engine too (a stubbed curve would let a sign error through).
+export type RetrievabilityFn = (schedule: ScheduleInfo, at: Date) => number;
 
 // Min across faces, deliberately: a card is only as well known as its weaker
 // direction. This is a pedagogical rule, not an artefact of SM-2, and it had to
@@ -66,20 +66,24 @@ function maxSeenDifficulty(card: ParsedCard): number {
 // face reaching this function would silently jump the entire queue (plan P4.2b).
 // classifyPools already routes such cards to newCards, but this function does not
 // rely on that: it is defensive in its own right.
-function minRetrievability(card: ParsedCard, now: Date, retrievability: RetrievabilityFn): number {
+function minRetrievability(card: ParsedCard, today: Date, retrievability: RetrievabilityFn): number {
     let m = Infinity;
     for (const s of card.schedules) {
         if (isFaceNew(s)) continue;
-        if (!isFaceDue(s, now)) continue;
-        const r = retrievability(s!, now);
+        if (!isFaceDue(s, today)) continue;
+        const r = retrievability(s!, today);
         if (r < m) m = r;
     }
     return m;
 }
 
+// `today` is the session day from globalDateProvider.today, not a raw clock
+// reading. Under a startOfDay boundary it resolves to the previous calendar day
+// before the cutoff (P6.3), so both the due split and the retrievability the
+// ranking reads move together with it.
 export function classifyPools(
     cards: readonly CardLocation[],
-    now: Date,
+    today: Date,
     retrievability: RetrievabilityFn,
     rng: () => number = Math.random,
 ): LearnPools {
@@ -98,7 +102,7 @@ export function classifyPools(
         }
         const stability = minSeenStability(card);
         const hasDue =
-            isFaceDue(card.schedules[0], now) || isFaceDue(card.schedules[1], now);
+            isFaceDue(card.schedules[0], today) || isFaceDue(card.schedules[1], today);
         const mature = stability >= LEARN_MATURE_STABILITY;
         if (hasDue) {
             (mature ? matureDue : youngDue).push(loc);
@@ -122,8 +126,8 @@ export function classifyPools(
     // stability return exactly the same retrievability. Ties are the common case,
     // not the edge case.
     const rankDue = (a: CardLocation, b: CardLocation): number => {
-        const ra = minRetrievability(a.card, now, retrievability);
-        const rb = minRetrievability(b.card, now, retrievability);
+        const ra = minRetrievability(a.card, today, retrievability);
+        const rb = minRetrievability(b.card, today, retrievability);
         if (ra !== rb) return ra - rb;
         return maxSeenDifficulty(b.card) - maxSeenDifficulty(a.card);
     };

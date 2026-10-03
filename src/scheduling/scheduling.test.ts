@@ -216,13 +216,14 @@ describe("date providers", () => {
         expect(p.now.getFullYear()).toBe(2026);
     });
 
-    // P6.2's job. Recorded here so the gap is a documented expectation rather
-    // than a surprise: the provider stores the boundary and ignores it.
-    it("StaticDateProvider still ignores the day boundary (Phase 6 implements it)", () => {
+    // Implemented in P6.2. The full boundary suite lives in day-boundary.test.ts;
+    // this one stays here because it is the provider contract the rest of this
+    // file reads.
+    it("StaticDateProvider honours the day boundary", () => {
         const p = new StaticDateProvider(new Date(2026, 8, 30, 2, 0, 0));
         p.setDayBoundary({ hour: 4, minute: 0, second: 0 });
         expect(p.getDayBoundary()).toEqual({ hour: 4, minute: 0, second: 0 });
-        expect(formatDate(p.today.valueOf())).toBe("2026-09-30");
+        expect(formatDate(p.today.valueOf())).toBe("2026-09-29");
     });
 
     it("LiveDateProvider.today is midnight of the current day by default", () => {

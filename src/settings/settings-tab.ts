@@ -9,6 +9,7 @@ import {
     REQUEST_RETENTION_STEP,
 } from "src/settings/index";
 import { describeReport, runConversion } from "src/migration/convert-vault";
+import { applyDayBoundary } from "src/scheduling/dates";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
     private readonly plugin: EuphoricFlashcardsPlugin;
@@ -41,6 +42,10 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             s[key] = value;
         }
         await this.plugin.saveData_();
+        // The day boundary lives on the date provider, not in settings, so the
+        // provider has to be told. Doing it here rather than on modal open means
+        // a session already in progress picks the new boundary up too.
+        if (key === "startOfDay") applyDayBoundary(this.plugin.data.settings.startOfDay);
         // The deposit inbox and notification rows are disabled while the
         // feature is off, so their disabled state has to be re-evaluated.
         if (key === "enableSentenceDeposit") this.update();
@@ -301,6 +306,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                             cur.maximumInterval = d.maximumInterval;
                             cur.loadBalance = d.loadBalance;
                             cur.startOfDay = d.startOfDay;
+                            applyDayBoundary(cur.startOfDay);
                             void this.plugin.saveData_();
                             this.update();
                         },
@@ -343,7 +349,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Start of day",
-                        desc: "Cards whose due date is today only become available after this time. Set to e.g. 02:00:00 if you study past midnight and want yesterday's cards to stay due until then. Format: HH:MM:SS.",
+                        desc: "Cards whose due date is today only become available after this time. Set to e.g. 02:00:00 if you study past midnight and want yesterday's cards to stay due until then. Format: HH:MM:SS, and anything else falls back to midnight.",
                         control: {
                             type: "text",
                             key: "startOfDay",
