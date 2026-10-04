@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { convertContent, difficultyFromEase } from "src/migration/legacy-sr";
+
+// The committed fixture opens with #español, so that is its root deck tag.
+const ROOTS = ["#español"];
 import { buildScheduleComment, parseScheduleComment } from "src/persistence/comment-parser";
 import { buildDeckTree, flattenDeckTree } from "src/decks/deck-tree";
 import { State } from "src/scheduling/fsrs";
@@ -110,7 +113,7 @@ describe("Test Deck.md before conversion", () => {
     // is that the number does not move.
     it("miscounts multi-line continuation lines as New, before and after alike", () => {
         const before = deckStats(original);
-        const after = deckStats(convertContent(original).content);
+        const after = deckStats(convertContent(original, ROOTS).content);
         expect(before.get("español")!.new).toBe(10);
         expect(after.get("español")!.new).toBe(10);
         // The single-line learn-test decks have no continuation lines at all, so
@@ -126,7 +129,7 @@ describe("Test Deck.md before conversion", () => {
 
 describe("Test Deck.md conversion", () => {
     it("converts every card with no parse failures", () => {
-        const result = convertContent(original);
+        const result = convertContent(original, ROOTS);
         expect(result.commentsConverted).toBe(20);
         expect(result.facesSeeded).toBe(40);
         expect(result.malformed).toBe(0);
@@ -134,7 +137,7 @@ describe("Test Deck.md conversion", () => {
     });
 
     it("leaves every line that is not an SR comment byte-identical", () => {
-        const after = convertContent(original).content.split("\n");
+        const after = convertContent(original, ROOTS).content.split("\n");
         expect(after.length).toBe(originalLines.length);
         for (let i = 0; i < originalLines.length; i++) {
             if (SR_LINE.test(originalLines[i]!)) continue;
@@ -143,7 +146,7 @@ describe("Test Deck.md conversion", () => {
     });
 
     it("rewrites every SR line and only SR lines", () => {
-        const after = convertContent(original).content.split("\n");
+        const after = convertContent(original, ROOTS).content.split("\n");
         let rewritten = 0;
         for (let i = 0; i < originalLines.length; i++) {
             if (!SR_LINE.test(originalLines[i]!)) continue;
@@ -157,7 +160,7 @@ describe("Test Deck.md conversion", () => {
     // Zero data loss, stated as a round trip: the runtime parser that returned
     // [null, null] on every card above now returns two real schedules on each.
     it("produces cards the FSRS runtime parser reads as scheduled", () => {
-        const after = convertContent(original).content;
+        const after = convertContent(original, ROOTS).content;
         const converted = after.split("\n").filter(l => SR_LINE.test(l));
         expect(converted.length).toBe(20);
         for (const line of converted) {
@@ -178,7 +181,7 @@ describe("Test Deck.md conversion", () => {
     });
 
     it("seeds this vault's actual interval and ease values per §B5", () => {
-        const after = convertContent(original).content;
+        const after = convertContent(original, ROOTS).content;
         // "amanece" (line 3): !2026-09-24,1,250!2026-09-26,3,250
         const amanece = after.split("\n")[3]!;
         const [front, back] = parseScheduleComment(SR_LINE.exec(amanece)![0]);
@@ -197,7 +200,7 @@ describe("Test Deck.md conversion", () => {
     // user kept failing, so it must come out as HIGHER difficulty. Getting the
     // polarity backwards here is the §C3 landmine that nothing else would catch.
     it("maps this vault's lower ease to higher difficulty", () => {
-        const after = convertContent(original).content.split("\n");
+        const after = convertContent(original, ROOTS).content.split("\n");
         // File line 8 is "conocer"'s SR comment (ease 230); file line 4 is
         // "amanece"'s (ease 250). Zero-indexed here.
         const harder = parseScheduleComment(SR_LINE.exec(after[7]!)![0])[0]!;
@@ -214,7 +217,7 @@ describe("Test Deck.md conversion", () => {
     // stricter parser would turn this into unannounced data loss.
     it("recovers the one corrupted due date instead of dropping that face", () => {
         expect(originalLines[31]).toContain("2026-/09-24");
-        const after = convertContent(original).content.split("\n");
+        const after = convertContent(original, ROOTS).content.split("\n");
         const [front, back] = parseScheduleComment(SR_LINE.exec(after[31]!)![0]);
         expect(front).not.toBeNull();
         expect(back).not.toBeNull();
@@ -225,8 +228,8 @@ describe("Test Deck.md conversion", () => {
     });
 
     it("is a no-op on a second run over the real file", () => {
-        const once = convertContent(original);
-        const twice = convertContent(once.content);
+        const once = convertContent(original, ROOTS);
+        const twice = convertContent(once.content, ROOTS);
         expect(twice.commentsConverted).toBe(0);
         expect(twice.malformed).toBe(0);
         expect(twice.alreadyFsrs).toBe(20);
@@ -236,7 +239,7 @@ describe("Test Deck.md conversion", () => {
     // The converter emits through buildScheduleComment, so a re-serialised
     // schedule must reproduce the converted line exactly.
     it("round-trips through the writer without drift", () => {
-        const converted = convertContent(original).content.split("\n").filter(l => SR_LINE.test(l));
+        const converted = convertContent(original, ROOTS).content.split("\n").filter(l => SR_LINE.test(l));
         for (const line of converted) {
             const comment = SR_LINE.exec(line)![0];
             expect(buildScheduleComment(parseScheduleComment(comment))).toBe(comment);
@@ -251,7 +254,7 @@ describe("Test Deck.md conversion", () => {
 describe("Test Deck.md after conversion", () => {
     it("surfaces its cards as due to the deck tree", () => {
         const before = deckStats(original);
-        const after = deckStats(convertContent(original).content);
+        const after = deckStats(convertContent(original, ROOTS).content);
 
 for (const deck of ["español", "learn-test"]) {
             // Total is driven by card lines, so it cannot move.
@@ -262,7 +265,7 @@ for (const deck of ["español", "learn-test"]) {
     });
 
     it("keeps the nested subdeck structure intact", () => {
-        const after = deckStats(convertContent(original).content);
+        const after = deckStats(convertContent(original, ROOTS).content);
         expect(after.has("learn-test/subtest")).toBe(true);
         expect(after.has("learn-test/subtest/subtest")).toBe(true);
         // Parents aggregate their children.

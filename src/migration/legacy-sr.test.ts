@@ -200,6 +200,7 @@ describe("convertComment", () => {
 });
 
 describe("convertContent", () => {
+    const ROOTS = ["#espanol"];
     const note = [
         "#espanol/verbos",
         "",
@@ -215,7 +216,7 @@ describe("convertContent", () => {
     ].join("\n");
 
     it("converts every legacy comment and leaves FSRS ones alone", () => {
-        const result = convertContent(note);
+        const result = convertContent(note, ROOTS);
         expect(result.commentsConverted).toBe(2);
         expect(result.facesSeeded).toBe(3);
         expect(result.alreadyFsrs).toBe(1);
@@ -224,12 +225,12 @@ describe("convertContent", () => {
     });
 
     it("does not change the note's line count", () => {
-        const result = convertContent(note);
+        const result = convertContent(note, ROOTS);
         expect(result.content.split("\n").length).toBe(note.split("\n").length);
     });
 
     it("leaves the card text untouched", () => {
-        const result = convertContent(note);
+        const result = convertContent(note, ROOTS);
         expect(result.content).toContain("hablar - to speak");
         expect(result.content).toContain("#espanol/verbos");
     });
@@ -237,16 +238,16 @@ describe("convertContent", () => {
     // Plan §P5.7 exit criterion: running the converter twice is a no-op the
     // second time.
     it("is idempotent", () => {
-        const once = convertContent(note);
-        const twice = convertContent(once.content);
+        const once = convertContent(note, ROOTS);
+        const twice = convertContent(once.content, ROOTS);
         expect(twice.commentsConverted).toBe(0);
         expect(twice.content).toBe(once.content);
         expect(twice.alreadyFsrs).toBe(3);
     });
 
     it("counts an unreadable comment without touching it", () => {
-        const broken = "palabra - word\n<!--SR:!2026-09-26,5-->\n";
-        const result = convertContent(broken);
+        const broken = "#espanol\npalabra - word\n<!--SR:!2026-09-26,5-->\n";
+        const result = convertContent(broken, ROOTS);
         expect(result.malformed).toBe(1);
         expect(result.commentsConverted).toBe(0);
         expect(result.content).toBe(broken);
@@ -254,8 +255,87 @@ describe("convertContent", () => {
 
     it("returns a note with no cards unchanged", () => {
         const plain = "# Notes\n\nnothing to see\n";
-        const result = convertContent(plain);
+        const result = convertContent(plain, ROOTS);
         expect(result.content).toBe(plain);
         expect(result.commentsConverted).toBe(0);
+    });
+});
+
+// Deck scoping. The converter is an irreversible in-place rewrite, so it must
+// touch only what belongs to the plugin. An <!--SR:!...-->-shaped comment is not
+// proof of ownership: another tool, or the user's own notes, can carry one.
+describe("convertContent deck scoping", () => {
+    const ROOTS = ["#espanol"];
+    const legacy = "<!--SR:!2026-09-26,5,203!2026-09-30,6,223-->";
+
+    it("leaves a note with no deck tag completely untouched", () => {
+        const note = `uno - one\n${legacy}\n`;
+        const result = convertContent(note, ROOTS);
+        expect(result.content).toBe(note);
+        expect(result.commentsConverted).toBe(0);
+        expect(result.inScope).toBe(false);
+    });
+
+    it("leaves a note tagged only with an unrecognised tag untouched", () => {
+        const note = `#journal\nmy note - with a dash\n${legacy}\n`;
+        const result = convertContent(note, ROOTS);
+        expect(result.content).toBe(note);
+        expect(result.commentsConverted).toBe(0);
+        expect(result.inScope).toBe(false);
+    });
+
+    it("converts under a subdeck of a root tag", () => {
+        const result = convertContent(`#espanol/verbos\nhablar - to speak\n${legacy}\n`, ROOTS);
+        expect(result.commentsConverted).toBe(1);
+        expect(result.inScope).toBe(true);
+    });
+
+    it("matches a root tag case-insensitively", () => {
+        const result = convertContent(`#ESPANOL\nuno - one\n${legacy}\n`, ROOTS);
+        expect(result.commentsConverted).toBe(1);
+    });
+
+    it("does not treat a tag that merely shares a prefix as a subdeck", () => {
+        // #espanolito is not #espanol or #espanol/anything.
+        const note = `#espanolito\nuno - one\n${legacy}\n`;
+        const result = convertContent(note, ROOTS);
+        expect(result.content).toBe(note);
+        expect(result.commentsConverted).toBe(0);
+    });
+
+    it("converts only the part of a mixed note that follows the deck tag", () => {
+        const note = [
+            "private - not a card",
+            legacy,
+            "",
+            "#espanol",
+            "uno - one",
+            legacy,
+            "",
+        ].join("\n");
+        const result = convertContent(note, ROOTS);
+        expect(result.commentsConverted).toBe(1);
+        const after = result.content.split("\n");
+        // The pre-tag comment survives byte for byte, the post-tag one does not.
+        expect(after[1]).toBe(legacy);
+        expect(after[5]).not.toBe(legacy);
+    });
+
+    it("converts nothing at all when no root tags are configured", () => {
+        const note = `#espanol\nuno - one\n${legacy}\n`;
+        const result = convertContent(note, []);
+        expect(result.content).toBe(note);
+        expect(result.commentsConverted).toBe(0);
+        expect(result.inScope).toBe(false);
+    });
+
+    it("ignores whitespace-only root tag entries", () => {
+        const note = `#espanol\nuno - one\n${legacy}\n`;
+        expect(convertContent(note, ["   ", ""]).commentsConverted).toBe(0);
+    });
+
+    it("is lossless on CRLF notes outside scope", () => {
+        const note = `private - x\r\n${legacy}\r\n`;
+        expect(convertContent(note, ROOTS).content).toBe(note);
     });
 });

@@ -13,8 +13,8 @@ import { applyDayBoundary } from "src/scheduling/dates";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
     private readonly plugin: EuphoricFlashcardsPlugin;
-    // Reentrancy guard for the one-time converter. It rewrites notes across the
-    // whole vault, so two overlapping runs must not be possible from one button.
+    // Reentrancy guard for the one-time converter. It rewrites notes in place,
+    // so two overlapping runs must not be possible from one button.
     private converting = false;
 
     constructor(app: App, plugin: EuphoricFlashcardsPlugin) {
@@ -425,7 +425,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 items: [
                     {
                         name: "Convert vault to FSRS",
-                        desc: "Rewrites every pre-FSRS card in the vault to the FSRS format. Cards already in the FSRS format are left alone, so running this twice changes nothing.",
+                        desc: "Rewrites your pre-FSRS cards to the FSRS format. Only cards under your root deck tags (and their subdecks) are touched, so notes outside your decks are left alone.",
                         action: (): void => { void this.runConverter(); },
                     },
                 ],
@@ -445,13 +445,14 @@ export class EuphoricSettingsTab extends PluginSettingTab {
         if (this.converting) return;
         this.converting = true;
         try {
-            const dryRun = await runConversion(this.app.vault, { write: false });
+            const rootTags = this.plugin.data.settings.rootDeckTags;
+            const dryRun = await runConversion(this.app.vault, { write: false, rootTags });
             if (dryRun.commentsConverted === 0) {
                 new Notice(describeReport(dryRun, true));
                 return;
             }
 
-            const report = await runConversion(this.app.vault, { write: true });
+            const report = await runConversion(this.app.vault, { write: true, rootTags });
             await this.plugin.histogramStore.rebuild(this.app.vault);
             await this.plugin.saveData_();
             new Notice(describeReport(report, false));

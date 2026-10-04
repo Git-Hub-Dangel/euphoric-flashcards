@@ -3,6 +3,7 @@ import { DUMMY_DUE_DATE_FOR_NEW_CARD, PREFERRED_DATE_FORMAT, TICKS_PER_DAY } fro
 import { formatDate, parseLegacyDate } from "src/scheduling/dates";
 import { State } from "src/scheduling/fsrs";
 import type { ScheduleInfo } from "src/scheduling/fsrs";
+import { computeDeckScope } from "src/decks/tag-scope";
 
 // The one-time SM-2 to FSRS converter (FSRS plan §B5, Phase 5).
 //
@@ -180,35 +181,61 @@ export interface ContentResult {
     facesSeeded: number;
     alreadyFsrs: number;
     malformed: number;
+    // True when the note holds at least one line inside a configured deck. Lets
+    // the vault walk report a denominator of notes it actually considered.
+    inScope: boolean;
 }
 
-// Rewrite every legacy SR comment in one note's text.
+// Rewrite the legacy SR comments inside one note's deck regions.
 //
 // A pure textual substitution, deliberately not a parseCard round trip: it
 // touches only the inside of the comment, so a note's line count cannot change
 // and none of the shiftLocationsForDelta machinery is involved. It also means a
 // comment the card parser would reject for unrelated reasons still gets its
 // schedule converted.
-export function convertContent(content: string): ContentResult {
+// Scoped to the configured root deck tags, never the whole note.
+//
+// A note can hold plugin decks and unrelated content side by side, and an
+// `<!--SR:!...-->` comment is not proof that a line belongs to this plugin. So
+// only lines inside an active deck region are rewritten (see computeDeckScope).
+// Everything else is returned byte for byte, and the counters ignore it too, so
+// a dry run reports the same scope the real run will write.
+//
+// Splitting on "\n" and rejoining on "\n" is lossless for CRLF notes, because a
+// trailing "\r" stays attached to its line.
+export function convertContent(content: string, rootTags: string[]): ContentResult {
     let commentsConverted = 0;
     let facesSeeded = 0;
     let alreadyFsrs = 0;
     let malformed = 0;
 
-    const next = content.replace(SR_COMMENT_PATTERN, (match) => {
-        const result = convertComment(match);
-        if (result.status === "already-fsrs") {
-            alreadyFsrs++;
-            return match;
-        }
-        if (result.status === "malformed" || result.comment === null) {
-            malformed++;
-            return match;
-        }
-        commentsConverted++;
-        facesSeeded += result.seededFaces;
-        return result.comment;
+    const lines = content.split("\n");
+    const inScope = computeDeckScope(lines, rootTags);
+
+    const converted = lines.map((line, i) => {
+        if (!inScope[i]) return line;
+        return line.replace(SR_COMMENT_PATTERN, (match) => {
+            const result = convertComment(match);
+            if (result.status === "already-fsrs") {
+                alreadyFsrs++;
+                return match;
+            }
+            if (result.status === "malformed" || result.comment === null) {
+                malformed++;
+                return match;
+            }
+            commentsConverted++;
+            facesSeeded += result.seededFaces;
+            return result.comment;
+        });
     });
 
-    return { content: next, commentsConverted, facesSeeded, alreadyFsrs, malformed };
+    return {
+        content: converted.join("\n"),
+        commentsConverted,
+        facesSeeded,
+        alreadyFsrs,
+        malformed,
+        inScope: inScope.some(Boolean),
+    };
 }
