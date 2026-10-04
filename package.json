@@ -16,7 +16,7 @@
         "language",
         "learning"
     ],
-    "author": "Daniel Khansa",
+    "author": "Daniel",
     "license": "MIT",
     "devDependencies": {
         "@types/node": "^22.0.0",
