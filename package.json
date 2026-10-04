@@ -1,6 +1,6 @@
 {
     "name": "euphoric-flashcards",
-    "version": "1.4.1",
+    "version": "2.0.0",
     "description": "Own your language, don't memorise it. A spaced-repetition system built exclusively for effective language learning.",
     "main": "main.js",
     "scripts": {
