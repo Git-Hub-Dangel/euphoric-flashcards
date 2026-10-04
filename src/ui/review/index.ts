@@ -285,7 +285,7 @@ export class ReviewModal extends Modal {
     }
 
     // B2's preview rule: an interval is rendered if and only if a write will
-    // occur. On the post-Again re-drill the write already happened, so all three
+    // occur. On the post-Again re-drill the write already happened, so the drill
     // buttons come up bare.
     private previewLabel(
         item: ReviewItem,
@@ -297,13 +297,23 @@ export class ReviewModal extends Modal {
         return textInterval(scheduledDays(preview[ratingFor(response)]), true);
     }
 
-    // Three buttons on every face, first pass and re-drill alike (B2). The
-    // post-Again "OK" surface is gone; Again now carries its own write.
+    // Three buttons on a first pass, two on the post-Again re-drill.
+    //
+    // The reduced drill surface is cosmetic. B2 still holds: the first answer on
+    // a face is the only one that writes, so neither drill button writes
+    // anything, and a third grade there would imply a choice the scheduler never
+    // sees. Keys follow the buttons, because addResponseButton registers them, so
+    // 3 is simply unbound on the re-drill.
     private renderReviewButtons(
         actionsEl: HTMLElement,
         item: ReviewItem,
         schedule: ScheduleInfo | null,
     ): void {
+        if (this.writtenItems.has(item)) {
+            this.renderDrillButtons(actionsEl, item);
+            return;
+        }
+
         const preview = this.snapshotPreview(schedule);
 
         this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw",
@@ -315,6 +325,18 @@ export class ReviewModal extends Modal {
         this.addResponseButton(actionsEl, 3, "Good", "ef-btn-good", "check",
             this.previewLabel(item, preview, ReviewResponse.Good),
             () => { void this.handleScheduledResponse(ReviewResponse.Good, item); });
+    }
+
+    // The post-Again drill surface. Again sends the face round again, Okay
+    // releases it and moves on. Both are routed through the same handler as the
+    // first pass, which already skips the write for a face in writtenItems, so
+    // the no-second-write rule stays in one place. No snapshot is taken here
+    // because nothing will be written or previewed from it.
+    private renderDrillButtons(actionsEl: HTMLElement, item: ReviewItem): void {
+        this.addResponseButton(actionsEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
+            () => { void this.handleScheduledResponse(ReviewResponse.Again, item); });
+        this.addResponseButton(actionsEl, 2, "Okay", "ef-btn-okay", "activity", null,
+            () => { void this.handleScheduledResponse(ReviewResponse.Hard, item); });
     }
 
     private renderCramButtons(actionsEl: HTMLElement, item: ReviewItem): void {

@@ -166,7 +166,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Card side for conjuring sentences",
-                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native / proficient language. (e.g. If you use the syntax 'word - translation', then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word in your target language, then apply it.",
+                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native or proficient language. (e.g. If you use the syntax 'word - translation' then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word and then apply it.",
                         control: {
                             type: "dropdown",
                             key: "learnSentenceSide",
@@ -194,7 +194,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Word selection method",
-                        desc: "Optimised: assures that the selection contains an even mix of older and newer cards.\n\nRandom: arbitrary random draw",
+                        desc: "Optimised: assures that the selection sprinkles in few mature cards alongside the predominant pool of new cards to help you conjure cohesively. \n\nRandom: arbitrary random draw",
                         control: {
                             type: "dropdown",
                             key: "conjureSentencesSelection",
@@ -325,7 +325,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Target retention",
-                        desc: "The probability of recall FSRS aims for at the moment a card comes due. 0.90 means you should remember about 90% of cards when they appear. Lower values mean longer intervals and less reviewing, at the cost of more forgetting.",
+                        desc: "This value tells the scheduling algorithm what percentual amount of cards you should be able to guess correctly upon review. Lower values mean longer intervals and less reviewing, at the cost of more forgetting. (At the default value you should effectively recall 90%+ of your due cards per full review session)",
                         control: {
                             type: "slider",
                             key: "requestRetention",

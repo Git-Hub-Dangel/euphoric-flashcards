@@ -198,16 +198,17 @@ export class LearnModal extends Modal {
             return;
         }
         if (step.kind === "face") {
-            // step.isPostAgain is no longer threaded into the UI: under B2 the
-            // re-drill renders exactly like a first pass, minus the previews,
-            // and willWrite() already answers that question.
-            this.renderFace(step.item);
+            // isPostAgain drives the reduced drill surface. willWrite() cannot
+            // stand in for it: that is also false for a face which was never
+            // write-eligible in this group, and such a face is a first pass and
+            // keeps all three buttons.
+            this.renderFace(step.item, step.isPostAgain);
         } else {
             this.renderSentence(step.words);
         }
     }
 
-    private renderFace(item: LearnItem): void {
+    private renderFace(item: LearnItem, isPostAgain: boolean): void {
         if (!this.bodyEl || !this.footerEl) return;
         this.clearKeymap();
         this.revealed = false;
@@ -258,7 +259,7 @@ export class LearnModal extends Modal {
             answerEl.removeClass("ef-hidden");
             staggerIn(answerEl, 0);
             showBtn.remove();
-            this.renderFaceActions(item, face.schedule);
+            this.renderFaceActions(item, face.schedule, isPostAgain);
         };
         showBtn.addEventListener("click", doReveal);
         this.addKey(" ", doReveal);
@@ -267,11 +268,20 @@ export class LearnModal extends Modal {
         this.firstRender = false;
     }
 
-    // B2: the same three buttons on every face, first pass and re-drill alike.
-    // The post-Again "OK" surface is gone — Again already wrote, so the re-drill
-    // is pure drill and shows three bare buttons with no previews.
-    private renderFaceActions(item: LearnItem, schedule: ScheduleInfo | null): void {
+    // Three buttons on a first pass, two on the post-Again re-drill, matching
+    // Review. The reduced surface is cosmetic. B2 still holds, so neither drill
+    // button writes, and a third grade there would imply a choice the scheduler
+    // never sees. Keys follow the buttons, so 3 is unbound on the re-drill.
+    private renderFaceActions(
+        item: LearnItem,
+        schedule: ScheduleInfo | null,
+        isPostAgain: boolean,
+    ): void {
         if (!this.footerEl || !this.session) return;
+        if (isPostAgain) {
+            this.renderDrillActions(item);
+            return;
+        }
         const settings = this.plugin.data.settings;
         // The preview rule: render an interval if and only if a write will occur.
         const showInterval = settings.showIntervalOnButtons && this.session.willWrite(item);
@@ -289,6 +299,19 @@ export class LearnModal extends Modal {
         this.addResponseButton(this.footerEl, 3, "Good", "ef-btn-good", "check",
             label(ReviewResponse.Good),
             () => { void this.handleFaceAnswer(item, "Good"); });
+    }
+
+    // The post-Again drill surface. Again sends the face round again, Okay
+    // releases it. Routed through the same handler as a first pass, which the
+    // session already answers with a null writeIntent for a face it has written,
+    // so the no-second-write rule stays in one place. No snapshot is taken,
+    // because nothing will be written or previewed from it.
+    private renderDrillActions(item: LearnItem): void {
+        if (!this.footerEl) return;
+        this.addResponseButton(this.footerEl, 1, "Again", "ef-btn-again", "rotate-ccw", null,
+            () => { void this.handleFaceAnswer(item, "Again"); });
+        this.addResponseButton(this.footerEl, 2, "Okay", "ef-btn-okay", "activity", null,
+            () => { void this.handleFaceAnswer(item, "Okay"); });
     }
 
     private addResponseButton(
