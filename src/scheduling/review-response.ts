@@ -1,6 +1,7 @@
-// Quality ordering is load-bearing: worstOf (src/learn/group-state.ts) takes the
-// largest enum value seen. Easy is never emitted by any button, but it holds
-// position 0 so Good=1 / Hard=2 / Again=3 keep their values.
+// Easy is never emitted by a button. It holds position 0 for historical reasons
+// only. The quality ordering lives in QUALITY_RANK (src/learn/group-state.ts),
+// which is what isWorseThan and worstOf read, so these numbers are not load
+// bearing and must never be compared directly.
 export enum ReviewResponse {
     Easy,
     Good,

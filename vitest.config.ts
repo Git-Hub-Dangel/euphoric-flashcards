@@ -11,6 +11,10 @@ export default defineConfig({
     },
     test: {
         environment: "node",
+        // Pinned so day-boundary and DST behaviour is deterministic rather than a
+        // property of the machine running the suite. Europe/Berlin observes DST,
+        // so the spring-forward regression in day-boundary.test.ts can assert.
+        env: { TZ: "Europe/Berlin" },
         include: ["src/**/*.test.ts"],
         coverage: {
             provider: "v8",

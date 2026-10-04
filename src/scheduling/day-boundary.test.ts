@@ -335,3 +335,35 @@ describe("load balancing under the day boundary", () => {
         expect(formatDate(balanced[Rating.Good].due.valueOf())).not.toBe(targetIso);
     });
 });
+
+// Spring forward makes the preceding day 23 hours long, so subtracting a fixed
+// 24 hours lands on 23:00 of the day before and floors to the wrong calendar
+// day. TZ is pinned to Europe/Berlin in vitest.config.ts, where the 2026
+// transitions are March 29 and October 25. Without that pin these assertions
+// would be decorative on a machine in a zone that does not observe DST.
+describe("dayFor across a DST transition", () => {
+    const BOUNDARY = { hour: 4, minute: 0, second: 0 };
+
+    it("returns the previous calendar day on a spring-forward morning", () => {
+        const day = dayFor(new Date(2026, 2, 30, 1, 30), BOUNDARY);
+        expect(day.getFullYear()).toBe(2026);
+        expect(day.getMonth()).toBe(2);
+        expect(day.getDate()).toBe(29);
+        expect(day.getHours()).toBe(0);
+    });
+
+    it("returns the previous calendar day on a fall-back morning", () => {
+        const day = dayFor(new Date(2026, 9, 26, 1, 30), BOUNDARY);
+        expect(day.getMonth()).toBe(9);
+        expect(day.getDate()).toBe(25);
+        expect(day.getHours()).toBe(0);
+    });
+
+    it("lands on local midnight of the previous day for every day in two years", () => {
+        for (let i = 0; i < 740; i++) {
+            const at = new Date(2026, 0, 1 + i, 1, 30);
+            const want = new Date(at.getFullYear(), at.getMonth(), at.getDate() - 1);
+            expect(dayFor(at, BOUNDARY).valueOf()).toBe(want.valueOf());
+        }
+    });
+});

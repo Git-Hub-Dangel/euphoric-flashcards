@@ -597,7 +597,7 @@ describe("B2 rating contract", () => {
         ));
 
         expect(after.lapses).toBe(before.lapses + 1);
-        // B2: lapse severity is FSRS's stability floor, not a collapse to one day.
+        // B2 puts lapse severity in FSRS rather than collapsing the interval.
         expect(after.stability).toBeLessThan(before.stability);
         expect(after.stability).toBeGreaterThan(0);
     });

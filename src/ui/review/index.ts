@@ -1,4 +1,4 @@
-import { App, Modal, setIcon } from "obsidian";
+import { App, Modal, Notice, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
@@ -374,7 +374,17 @@ export class ReviewModal extends Modal {
             const preview = this.pendingPreview ?? previewAll(
                 item.card.schedules[item.faceIndex], this.plugin, globalDateProvider.now,
             );
-            await this.writeSchedule(item, preview[ratingFor(response)]);
+            try {
+                await this.writeSchedule(item, preview[ratingFor(response)]);
+            } catch (e) {
+                // Hand the card back rather than advancing. revealed was cleared
+                // on entry, so without restoring it every button and key stays
+                // dead and the session can only be escaped by closing the modal.
+                console.error("EuphoricFlashcards ReviewModal write:", e);
+                new Notice("Failed to save your answer. The file may have changed on disk. Answer again to retry.");
+                this.revealed = true;
+                return;
+            }
             // Only after the write actually succeeded: a throw leaves the face
             // unmarked so a later answer can still persist it.
             this.writtenItems.add(item);

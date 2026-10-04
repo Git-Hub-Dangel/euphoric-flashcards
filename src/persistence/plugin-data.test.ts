@@ -8,6 +8,7 @@ import {
 import {
     CURRENT_DATA_VERSION,
     DEFAULT_DATA,
+    hydratePluginData,
     migratePluginData,
 } from "src/persistence/plugin-data";
 import type { PluginData } from "src/persistence/plugin-data";
@@ -238,5 +239,50 @@ describe("DEFAULT_DATA", () => {
         expect("buryDate" in bag).toBe(false);
         expect("buryList" in bag).toBe(false);
         expect("easyBonus" in DEFAULT_SETTINGS).toBe(false);
+    });
+});
+
+// hydratePluginData, which holds loadData_'s rules. Two are load bearing with no
+// compile-time protection, and FSRS_PROGRESS claimed they were tested when they
+// were not. They are now.
+describe("hydratePluginData", () => {
+    it("forces dataVersion to 1 when a saved object lacks the key", () => {
+        const data = hydratePluginData({ expandedDecks: [] });
+        expect(data.dataVersion).toBe(1);
+    });
+
+    it("leaves a genuinely fresh install at the current version", () => {
+        const data = hydratePluginData(null);
+        expect(data.dataVersion).toBe(CURRENT_DATA_VERSION);
+    });
+
+    it("respects a saved numeric dataVersion", () => {
+        const data = hydratePluginData({ dataVersion: 2 });
+        expect(data.dataVersion).toBe(2);
+    });
+
+    it("clones the histogram so the shared default is not mutated", () => {
+        const a = hydratePluginData(null);
+        a.histogram.data["2026-01-01"] = 5;
+        const b = hydratePluginData(null);
+        expect(b.histogram.data).toEqual({});
+        expect(DEFAULT_DATA.histogram.data).toEqual({});
+    });
+
+    it("does not alias the nested mutable settings defaults", () => {
+        const a = hydratePluginData(null);
+        const b = hydratePluginData(null);
+        expect(a.settings.cardTypes).not.toBe(b.settings.cardTypes);
+        expect(a.settings.cardTypes[0]).not.toBe(b.settings.cardTypes[0]);
+        a.settings.cardTypes[0]!.label = "mutated";
+        expect(b.settings.cardTypes[0]!.label).not.toBe("mutated");
+        expect(DEFAULT_SETTINGS.cardTypes[0]!.label).not.toBe("mutated");
+    });
+
+    it("deep clones construction constraint collections", () => {
+        const a = hydratePluginData({ settings: { ...DEFAULT_SETTINGS, constructionConstraints: [{ labels: ["x"], deckTags: ["y"] }] } });
+        const copy = a.settings.constructionConstraints[0]!;
+        copy.labels.push("z");
+        expect(copy.labels).toEqual(["x", "z"]);
     });
 });

@@ -4,7 +4,7 @@ import { EuphoricSettingsTab } from "src/settings/settings-tab";
 import { ExplorerModal } from "src/ui/explorer/index";
 import { HistogramStore } from "src/scheduling/histogram-store";
 import { applyDayBoundary } from "src/scheduling/dates";
-import { CURRENT_DATA_VERSION, DEFAULT_DATA, migratePluginData } from "src/persistence/plugin-data";
+import { DEFAULT_DATA, hydratePluginData, migratePluginData } from "src/persistence/plugin-data";
 import type { PluginData } from "src/persistence/plugin-data";
 
 export type { ExplorerState, PluginData } from "src/persistence/plugin-data";
@@ -12,47 +12,50 @@ export type { ExplorerState, PluginData } from "src/persistence/plugin-data";
 export default class EuphoricFlashcardsPlugin extends Plugin {
     data: PluginData = DEFAULT_DATA;
     histogramStore!: HistogramStore;
+    private unloaded = false;
 
-    onload(): void {
-        void (async (): Promise<void> => {
-            await this.loadData_();
+    // Awaited rather than fire and forget. A detached load leaves a window in
+    // which onunload can run while this.data is still DEFAULT_DATA, which would
+    // write the defaults over a real data.json.
+    async onload(): Promise<void> {
+        await this.loadData_();
 
-            // Must run before HistogramStore captures this.data.histogram by
-            // reference, and before any consumer reads a migrated key.
-            const migratedFrom = migratePluginData(this.data);
-            if (migratedFrom !== null) {
-                console.log(
-                    `EuphoricFlashcards: migrated plugin data v${migratedFrom} -> v${CURRENT_DATA_VERSION}`,
-                );
-                await this.saveData_();
-            }
+        // Must run before HistogramStore captures this.data.histogram by
+        // reference, and before any consumer reads a migrated key.
+        const migratedFrom = migratePluginData(this.data);
+        if (migratedFrom !== null) {
+            await this.saveData_();
+        }
 
-            this.histogramStore = new HistogramStore(this.data.histogram);
+        this.histogramStore = new HistogramStore(this.data.histogram);
 
-            // Must run before anything reads globalDateProvider.today (P6.1).
-            // The histogram rebuild below is the first such reader, and every
-            // due-date comparison in the plugin is downstream of it.
-            applyDayBoundary(this.data.settings.startOfDay);
+        // Must run before anything reads globalDateProvider.today (P6.1).
+        // The histogram rebuild below is the first such reader, and every
+        // due-date comparison in the plugin is downstream of it.
+        applyDayBoundary(this.data.settings.startOfDay);
 
-            this.addSettingTab(new EuphoricSettingsTab(this.app, this));
+        this.addSettingTab(new EuphoricSettingsTab(this.app, this));
 
-            this.addCommand({
-                id: "open-explorer",
-                name: "Review",
-                callback: () => {
-                    new ExplorerModal(this.app, this).open();
-                },
-            });
+        this.addCommand({
+            id: "open-explorer",
+            name: "Review",
+            callback: () => {
+                new ExplorerModal(this.app, this).open();
+            },
+        });
 
-            // background build if the histogram is empty or older than a day.
-            // failure is non-fatal — the algorithm falls through when the
-            // histogram is empty.
-            if (this.data.settings.loadBalance && this.histogramNeedsRebuild()) {
-                this.histogramStore.rebuild(this.app.vault)
-                    .then(() => this.saveData_())
-                    .catch(err => console.error("EuphoricFlashcards: histogram build failed", err));
-            }
-        })();
+        // Background build if the histogram is empty or older than a day.
+        // Failure is not fatal (the algorithm falls through when the histogram
+        // is empty). The unloaded guard stops a late finish writing data back
+        // after the plugin has already been torn down.
+        if (this.data.settings.loadBalance && this.histogramNeedsRebuild()) {
+            this.histogramStore.rebuild(this.app.vault)
+                .then(() => {
+                    if (this.unloaded) return;
+                    return this.saveData_();
+                })
+                .catch(err => console.error("EuphoricFlashcards: histogram build failed", err));
+        }
     }
 
     private histogramNeedsRebuild(): boolean {
@@ -65,23 +68,15 @@ export default class EuphoricFlashcardsPlugin extends Plugin {
     }
 
     onunload(): void {
+        this.unloaded = true;
         void this.saveData_();
     }
 
     async loadData_(): Promise<void> {
         const saved = await this.loadData() as Partial<PluginData> | null;
-        this.data = Object.assign({}, DEFAULT_DATA, saved ?? {});
-        this.data.settings = Object.assign({}, DEFAULT_SETTINGS, this.data.settings);
-        // Installs from 1.4.1 and earlier predate dataVersion. The DEFAULT_DATA
-        // spread above would otherwise hand them the current version and the
-        // migration runner would skip them. A genuinely fresh install (saved ===
-        // null) is already current and must not be migrated.
-        if (saved !== null && typeof saved.dataVersion !== "number") {
-            this.data.dataVersion = 1;
-        }
-        // fresh histogram object so the shared DEFAULT_DATA reference isn't mutated
-        const h = this.data.histogram;
-        this.data.histogram = { data: h?.data ?? {}, builtAt: h?.builtAt ?? null };
+        // Every hydration rule lives in hydratePluginData so it stays testable
+        // without the obsidian import. See the notes there before changing it.
+        this.data = hydratePluginData(saved);
     }
 
     async saveData_(): Promise<void> {

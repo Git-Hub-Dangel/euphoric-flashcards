@@ -73,7 +73,7 @@ function stepV2ToV3(data: MutableData): void {
 // consumer when Phase 3 deleted osr.ts — `baseEase` seeded a new card's ease,
 // `defaultIntervalChange` scaled an Okay, and `lapsesIntervalChange` collapsed a
 // lapsed card's interval. FSRS derives all three from stability and difficulty,
-// and B2 explicitly replaces the third with FSRS's stability floor. Their sliders
+// and B2 explicitly replaces the third with FSRS's own lapse handling. Their sliders
 // went with them; without this step they would sit in data.json forever.
 function stepV3ToV4(data: MutableData): void {
     deleteKeys(data["settings"] as MutableData | undefined, [
@@ -108,4 +108,31 @@ export function migratePluginData(data: PluginData): number | null {
     }
     data.dataVersion = CURRENT_DATA_VERSION;
     return savedVersion;
+}
+
+// The load-time hydration rules, kept here rather than in main.ts so they are
+// testable without the obsidian import, exactly as migratePluginData is.
+//
+// Two of these are load bearing and have no compile-time protection.
+// Installs from 1.4.1 and earlier predate dataVersion, and the Object.assign
+// onto DEFAULT_DATA would otherwise hand them the current version so every
+// migration is skipped. A genuinely fresh install (saved === null) is already
+// current and must not be migrated. The nested clones exist because
+// Object.assign is shallow, so without them the settings tab edits the shared
+// DEFAULT_SETTINGS arrays in place.
+export function hydratePluginData(saved: Partial<PluginData> | null): PluginData {
+    const data = Object.assign({}, DEFAULT_DATA, saved ?? {}) as PluginData;
+    data.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings);
+    if (saved !== null && typeof saved.dataVersion !== "number") {
+        data.dataVersion = 1;
+    }
+    const h = data.histogram;
+    // The inner record is spread too. A fresh wrapper around the same `data`
+    // object still shares it with DEFAULT_DATA, and HistogramStore increments
+    // that record on every write.
+    data.histogram = { data: { ...(h?.data ?? {}) }, builtAt: h?.builtAt ?? null };
+    data.settings.cardTypes = data.settings.cardTypes.map(t => ({ ...t }));
+    data.settings.constructionConstraints = data.settings.constructionConstraints
+        .map(c => ({ labels: [...c.labels], deckTags: [...c.deckTags] }));
+    return data;
 }

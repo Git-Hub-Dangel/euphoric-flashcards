@@ -1,4 +1,4 @@
-import { App, Modal, setIcon } from "obsidian";
+import { App, Modal, Notice, setIcon } from "obsidian";
 import type { KeymapEventHandler } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { ReviewResponse } from "src/scheduling/review-response";
@@ -327,7 +327,10 @@ export class LearnModal extends Modal {
                     shiftLocationsForDelta(this.session.heldLocations(), item.card, item.filePath, delta);
                 }
             } catch (e) {
+                // The session has already recorded the answer, so the grade is
+                // lost for this face. Say so rather than failing silently.
                 console.error("EuphoricFlashcards LearnModal write:", e);
+                new Notice("Failed to save that answer. The file may have changed on disk.");
             }
         }
         this.renderStep();

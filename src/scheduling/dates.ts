@@ -1,4 +1,4 @@
-import { ALLOWED_DATE_FORMATS, PREFERRED_DATE_FORMAT, TICKS_PER_DAY } from "src/scheduling/constants";
+import { ALLOWED_DATE_FORMATS, PREFERRED_DATE_FORMAT } from "src/scheduling/constants";
 
 // `moment` has left the scheduling core (FSRS plan P3.8), and with it this
 // module's `obsidian` import. FSRS speaks native `Date`; the only thing moment
@@ -85,6 +85,10 @@ export interface IDateProvider {
 //
 // A null boundary and a literal 00:00:00 both collapse to plain local midnight
 // by construction, since no instant precedes its own day's start.
+//
+// The previous day is built by calendar arithmetic, never by subtracting a fixed
+// 24 hours. A spring-forward day is 23 hours long, so a fixed subtraction lands
+// on 23:00 of the day before and floors to the wrong calendar day.
 export function dayFor(at: Date, b: IDayBoundary | null): Date {
     const dayStart = startOfDay(at);
     if (b === null) return dayStart;
@@ -93,7 +97,7 @@ export function dayFor(at: Date, b: IDayBoundary | null): Date {
         b.hour, b.minute, b.second, 0,
     );
     if (at.valueOf() < boundary.valueOf()) {
-        return new Date(dayStart.valueOf() - TICKS_PER_DAY);
+        return new Date(at.getFullYear(), at.getMonth(), at.getDate() - 1);
     }
     return dayStart;
 }

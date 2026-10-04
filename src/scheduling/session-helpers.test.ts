@@ -84,13 +84,15 @@ describe("previewAll", () => {
         expect(preview[Rating.Again].lapses).toBe(reviewed().lapses + 1);
     });
 
-    it("floors stability on Again rather than collapsing it to one day", () => {
-        // §B2: lapse severity comes from FSRS, which is why the old
-        // lapsesIntervalChange reset-to-1-day has no replacement.
+    it("reduces stability on Again and leaves a usable interval", () => {
+        // Lapse severity comes from FSRS, which is why the old
+        // lapsesIntervalChange reset to one day has no replacement. Note FSRS
+        // does not floor stability (see fsrs.test.ts). What makes a lapse usable
+        // is that scheduled_days stays at or above one day.
         const before = reviewed({ stability: 60 });
         const after = previewAll(before, fakePlugin(), NOW)[Rating.Again];
         expect(after.stability).toBeLessThan(before.stability);
-        expect(after.stability).toBeGreaterThan(0);
+        expect(scheduledDays(after)).toBeGreaterThanOrEqual(1);
     });
 
     it("responds to the target-retention setting", () => {

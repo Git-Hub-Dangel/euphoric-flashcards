@@ -390,10 +390,21 @@ describe("enable_short_term: false — the contract the rest of the plugin relie
         }
     });
 
-    it("floors stability rather than collapsing it to zero on repeated failure", () => {
+    // There is no stability floor under enable_short_term: false. Stability decays
+    // monotonically toward zero (measured 2.3065 to 0.00106 over 40 consecutive
+    // Again, no asymptote). The thing that actually keeps a lapse usable is
+    // scheduled_days >= 1, asserted here and above. Do not replace this with an
+    // assertion that stability stays above some bound, and do not remove the
+    // interval clamp elsewhere on the belief that the engine floors stability.
+    it("decays stability monotonically on repeated failure while holding the interval at a day", () => {
         const chain = walk([Rating.Again], 40);
+        for (let i = 1; i < chain.length; i++) {
+            expect(chain[i]!.stability).toBeLessThan(chain[i - 1]!.stability);
+            expect(chain[i]!.scheduled_days).toBeGreaterThanOrEqual(1);
+        }
         const last = chain[chain.length - 1]!;
-        expect(last.stability).toBeGreaterThan(0);
+        expect(last.stability).toBeLessThan(0.01);
+        expect(last.state).toBe(State.Review);
     });
 });
 
@@ -585,5 +596,67 @@ describe("ratingFor", () => {
         expect(days(ReviewResponse.Hard)).toBeLessThanOrEqual(days(ReviewResponse.Good));
         expect(days(ReviewResponse.Good)).toBeLessThanOrEqual(days(ReviewResponse.Easy));
         expect(days(ReviewResponse.Again)).toBeLessThan(days(ReviewResponse.Easy));
+    });
+});
+
+// The overdue credit. Plan section A records that the SM-2 delayDays terms never
+// executed, so this is the first time a late review is actually rewarded. Three
+// baseline tests covered this axis and died with osr.ts. These replace them.
+//
+// The quantity under test is elapsed_days, which toCard derives from last_review
+// at read time rather than reading it off the file. A card answered late has a
+// larger elapsed_days, lower retrievability, and so earns a different schedule
+// from the same card answered on time.
+describe("a late review is credited for the extra elapsed time", () => {
+    // A card due 2026-01-15, last reviewed ten days earlier.
+    function seeded(): ScheduleInfo {
+        return {
+            due: new Date("2026-01-15T10:00:00Z"),
+            stability: 10,
+            difficulty: 5,
+            reps: 3,
+            lapses: 0,
+            state: State.Review,
+            last_review: new Date("2026-01-05T10:00:00Z"),
+        };
+    }
+
+    it("derives a larger elapsed_days when answered late", () => {
+        const punctual = toCard(seeded(), new Date("2026-01-15T10:00:00Z"));
+        const late = toCard(seeded(), new Date("2026-02-14T10:00:00Z"));
+        expect(punctual.elapsed_days).toBe(10);
+        expect(late.elapsed_days).toBe(40);
+    });
+
+    it("reports lower retrievability when answered late", () => {
+        const e = engine();
+        const punctual = e.retrievability(toCard(seeded(), new Date("2026-01-15T10:00:00Z")), new Date("2026-01-15T10:00:00Z"));
+        const late = e.retrievability(toCard(seeded(), new Date("2026-02-14T10:00:00Z")), new Date("2026-02-14T10:00:00Z"));
+        expect(late).toBeLessThan(punctual);
+    });
+
+    it("schedules Good further out when the review was late", () => {
+        const e = engine();
+        const onTime = new Date("2026-01-15T10:00:00Z");
+        const late = new Date("2026-02-14T10:00:00Z");
+        const punctual = e.schedule(toCard(seeded(), onTime), Rating.Good, onTime);
+        const delayed = e.schedule(toCard(seeded(), late), Rating.Good, late);
+        // The extra 30 days of successful retention is credited, so stability
+        // and the next interval both come out higher than the punctual case.
+        expect(delayed.stability).toBeGreaterThan(punctual.stability);
+        expect(delayed.scheduled_days).toBeGreaterThan(punctual.scheduled_days);
+    });
+
+    it("still credits the elapsed time on a lapse", () => {
+        const e = engine();
+        const onTime = new Date("2026-01-15T10:00:00Z");
+        const late = new Date("2026-02-14T10:00:00Z");
+        const punctual = e.schedule(toCard(seeded(), onTime), Rating.Again, onTime);
+        const delayed = e.schedule(toCard(seeded(), late), Rating.Again, late);
+        // Forgetting a card held for 40 days is less of a signal than
+        // forgetting one held for 10, so the post lapse stability differs.
+        expect(delayed.stability).not.toBe(punctual.stability);
+        expect(delayed.scheduled_days).toBeGreaterThanOrEqual(1);
+        expect(punctual.scheduled_days).toBeGreaterThanOrEqual(1);
     });
 });

@@ -30,9 +30,10 @@ export function preventBgTapDismiss(containerEl: HTMLElement): void {
     containerEl.addEventListener("touchstart", block, { capture: true });
 }
 
-// Applies the user's `animationDurationMs` setting to a modal's container
-// via a CSS custom property, or toggles a kill-switch class when disabled.
-// prefers-reduced-motion is handled purely in CSS.
+// Applies the user's `animationDurationMs` setting to a modal's container via a
+// CSS custom property, or toggles the kill switch class when disabled. The OS
+// reduced motion preference is handled in CSS for everything that paints, and in
+// motionSuppressed for the waits that live in JavaScript.
 export function applyAnimationDuration(containerEl: HTMLElement, ms: number): void {
     if (ms <= 0) {
         containerEl.addClass("ef-anim-off");
@@ -41,14 +42,14 @@ export function applyAnimationDuration(containerEl: HTMLElement, ms: number): vo
     containerEl.setCssProps({ "--ef-anim-dur": `${ms}ms` });
     // On mobile, Obsidian slides the modal up from the bottom over ~200 ms.
     // Offset every stagger by a pre-roll so our initial fade-ins wait for
-    // the modal to settle. This offset MUST be cleared after the initial
-    // render batch — otherwise every later interaction (reveal, next card,
-    // deck expand, redraw) would also wait for the pre-roll, producing a
-    // sluggish 300 ms lag after every tap. The first user touch/click on
-    // the container is a reliable "first render is done" signal: the initial
-    // batch of `.ef-anim-in` elements has already had its animation-delay
-    // computed by the browser, so zeroing the variable now only affects
-    // future elements.
+    // the modal to settle. This offset must be cleared after the initial
+    // render batch. Otherwise every later interaction (reveal, next card, deck
+    // expand, redraw) would also wait for the preroll, producing a sluggish
+    // 300 ms lag after every tap. The first user touch or click on the
+    // container stands in for "the first render is done". Note that
+    // animation-delay is live, so clearing the variable also releases any
+    // element still waiting out its delay, which is why the signal has to
+    // arrive after the initial batch rather than during it.
     if (Platform.isMobile) {
         containerEl.setCssProps({ "--ef-anim-preroll": "300ms" });
         const clearPreroll = (): void => {
@@ -67,10 +68,23 @@ export function staggerIn(el: HTMLElement, index: number): void {
     el.addClass(`ef-stagger-${index % 15}`);
 }
 
-// Triggers the leaving fade-out on a modal, then invokes `next` after the
-// animation duration. Used to bridge close-then-open transitions between our
-// modals so the swap doesn't flash.
+// True when motion is suppressed, either by the animationDurationMs setting or
+// by the OS preference. The CSS kill switch covers everything that paints. This
+// covers the waits that live in JavaScript, which CSS cannot reach.
+function motionSuppressed(containerEl: HTMLElement): boolean {
+    if (containerEl.hasClass("ef-anim-off")) return true;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// Triggers the leaving fade on a modal, then invokes `next` after the animation
+// duration. Used to bridge the close then open transition between our modals so
+// the swap does not flash. With motion suppressed it runs `next` at once, so a
+// zero duration means no wait rather than an invisible 120 ms stall.
 export function fadeOutThen(modal: Modal, next: () => void): void {
+    if (motionSuppressed(modal.containerEl)) {
+        next();
+        return;
+    }
     modal.modalEl.addClass("ef-modal-leaving");
     window.setTimeout(next, 120);
 }
