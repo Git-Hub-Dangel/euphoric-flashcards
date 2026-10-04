@@ -1,6 +1,7 @@
 import type { Vault } from "obsidian";
 
 import { convertContent } from "src/migration/legacy-sr";
+import type { ContentResult } from "src/migration/legacy-sr";
 import { normaliseRootTags } from "src/decks/tag-scope";
 
 // The vault walk for the one-time SM-2 to FSRS conversion (plan §P5.3 to §P5.5).
@@ -24,6 +25,16 @@ export interface ConversionReport {
     malformed: number;
     // Files whose read or write threw. Their contents are left untouched.
     errors: string[];
+    // The notes a run would change, with how many cards each holds. Only notes
+    // with at least one convertible card appear. Feeds the confirmation dialog.
+    affected: AffectedFile[];
+    // Cards per deck tag across the whole run, as the user wrote the tag.
+    decks: Record<string, number>;
+}
+
+export interface AffectedFile {
+    path: string;
+    cards: number;
 }
 
 function emptyReport(): ConversionReport {
@@ -37,7 +48,26 @@ function emptyReport(): ConversionReport {
         alreadyFsrs: 0,
         malformed: 0,
         errors: [],
+        affected: [],
+        decks: {},
     };
+}
+
+// Fold one note's result into the report. Shared by both branches so the dry
+// run and the real write cannot report different detail, which matters now that
+// the dry run's numbers are shown in a confirmation the user acts on.
+function absorb(report: ConversionReport, path: string, result: ContentResult): void {
+    report.commentsConverted += result.commentsConverted;
+    report.facesSeeded += result.facesSeeded;
+    report.alreadyFsrs += result.alreadyFsrs;
+    report.malformed += result.malformed;
+    if (result.inScope) report.notesInScope++;
+    if (result.commentsConverted > 0) {
+        report.affected.push({ path, cards: result.commentsConverted });
+    }
+    for (const [deck, n] of Object.entries(result.deckCounts)) {
+        report.decks[deck] = (report.decks[deck] ?? 0) + n;
+    }
 }
 
 // One pass over every markdown file. With `write: false` nothing is modified and
@@ -76,22 +106,14 @@ export async function runConversion(
                 let changed = false;
                 await vault.process(file, (data: string): string => {
                     const result = convertContent(data, opts.rootTags);
-                    report.commentsConverted += result.commentsConverted;
-                    report.facesSeeded += result.facesSeeded;
-                    report.alreadyFsrs += result.alreadyFsrs;
-                    report.malformed += result.malformed;
-                    if (result.inScope) report.notesInScope++;
+                    absorb(report, file.path, result);
                     changed = result.commentsConverted > 0;
                     return changed ? result.content : data;
                 });
                 if (changed) report.filesChanged++;
             } else {
                 const result = convertContent(await vault.cachedRead(file), opts.rootTags);
-                report.commentsConverted += result.commentsConverted;
-                report.facesSeeded += result.facesSeeded;
-                report.alreadyFsrs += result.alreadyFsrs;
-                report.malformed += result.malformed;
-                if (result.inScope) report.notesInScope++;
+                absorb(report, file.path, result);
                 if (result.commentsConverted > 0) report.filesChanged++;
             }
         } catch (err) {

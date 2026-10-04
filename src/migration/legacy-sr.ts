@@ -3,7 +3,7 @@ import { DUMMY_DUE_DATE_FOR_NEW_CARD, PREFERRED_DATE_FORMAT, TICKS_PER_DAY } fro
 import { formatDate, parseLegacyDate } from "src/scheduling/dates";
 import { State } from "src/scheduling/fsrs";
 import type { ScheduleInfo } from "src/scheduling/fsrs";
-import { computeDeckScope } from "src/decks/tag-scope";
+import { computeDeckRegions } from "src/decks/tag-scope";
 
 // The one-time SM-2 to FSRS converter (FSRS plan §B5, Phase 5).
 //
@@ -184,6 +184,9 @@ export interface ContentResult {
     // True when the note holds at least one line inside a configured deck. Lets
     // the vault walk report a denominator of notes it actually considered.
     inScope: boolean;
+    // Cards converted per deck tag, as the user wrote the tag. Feeds the
+    // confirmation dialog, which lists the decks a run would touch.
+    deckCounts: Record<string, number>;
 }
 
 // Rewrite the legacy SR comments inside one note's deck regions.
@@ -210,10 +213,12 @@ export function convertContent(content: string, rootTags: string[]): ContentResu
     let malformed = 0;
 
     const lines = content.split("\n");
-    const inScope = computeDeckScope(lines, rootTags);
+    const regions = computeDeckRegions(lines, rootTags);
+    const deckCounts: Record<string, number> = {};
 
     const converted = lines.map((line, i) => {
-        if (!inScope[i]) return line;
+        const deck = regions[i];
+        if (deck === undefined || deck === null) return line;
         return line.replace(SR_COMMENT_PATTERN, (match) => {
             const result = convertComment(match);
             if (result.status === "already-fsrs") {
@@ -226,6 +231,7 @@ export function convertContent(content: string, rootTags: string[]): ContentResu
             }
             commentsConverted++;
             facesSeeded += result.seededFaces;
+            deckCounts[deck] = (deckCounts[deck] ?? 0) + 1;
             return result.comment;
         });
     });
@@ -236,6 +242,7 @@ export function convertContent(content: string, rootTags: string[]): ContentResu
         facesSeeded,
         alreadyFsrs,
         malformed,
-        inScope: inScope.some(Boolean),
+        inScope: regions.some(tag => tag !== null),
+        deckCounts,
     };
 }

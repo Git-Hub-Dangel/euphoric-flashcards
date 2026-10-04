@@ -32,25 +32,31 @@ export function tagIsUnderRoot(tag: string, normRoots: string[]): boolean {
     return normRoots.some(r => n === r || n.startsWith(r + "/"));
 }
 
-// Per-line in-scope flags for one file's lines.
+// The deck tag in effect on each line, or null where none is, for one file's
+// lines. The tag is returned as the user wrote it (case preserved, `#` included)
+// so a caller can show it back to them. The most recently seen recognised tag
+// wins, matching `buildDeckTree`'s "last one on the line wins" rule.
 //
-// An empty root list yields all false, so a vault with no configured decks
+// An empty root list yields all null, so a vault with no configured decks
 // converts nothing. That default matters: treating "no roots" as "whole vault"
 // is the behaviour this rule exists to remove.
-export function computeDeckScope(lines: string[], rootTags: string[]): boolean[] {
+export function computeDeckRegions(lines: string[], rootTags: string[]): (string | null)[] {
     const normRoots = normaliseRootTags(rootTags);
-    const flags = new Array<boolean>(lines.length).fill(false);
-    if (normRoots.length === 0) return flags;
+    const regions = new Array<string | null>(lines.length).fill(null);
+    if (normRoots.length === 0) return regions;
 
-    let active = false;
+    let active: string | null = null;
     for (let i = 0; i < lines.length; i++) {
         for (const tag of tagsOnLine(lines[i] ?? "")) {
-            if (tagIsUnderRoot(tag, normRoots)) {
-                active = true;
-                break;
-            }
+            if (tagIsUnderRoot(tag, normRoots)) active = tag;
         }
-        flags[i] = active;
+        regions[i] = active;
     }
-    return flags;
+    return regions;
+}
+
+// Per-line in-scope flags. Derived from computeDeckRegions rather than walking
+// again, so the two answers cannot drift.
+export function computeDeckScope(lines: string[], rootTags: string[]): boolean[] {
+    return computeDeckRegions(lines, rootTags).map(tag => tag !== null);
 }

@@ -9,6 +9,7 @@ import {
     REQUEST_RETENTION_STEP,
 } from "src/settings/index";
 import { describeReport, runConversion } from "src/migration/convert-vault";
+import { ConvertConfirmModal } from "src/ui/convert-confirm/index";
 import { applyDayBoundary } from "src/scheduling/dates";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
@@ -298,22 +299,8 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 heading: "Scheduling",
                 items: [
                     {
-                        name: "Restore Default Settings",
-                        action: (): void => {
-                            const d = DEFAULT_SETTINGS;
-                            const cur = this.plugin.data.settings;
-                            cur.requestRetention = d.requestRetention;
-                            cur.maximumInterval = d.maximumInterval;
-                            cur.loadBalance = d.loadBalance;
-                            cur.startOfDay = d.startOfDay;
-                            applyDayBoundary(cur.startOfDay);
-                            void this.plugin.saveData_();
-                            this.update();
-                        },
-                    },
-                    {
-                        name: "Reset FSRS parameters to defaults",
-                        desc: "Restores the target retention and maximum interval to their shipped values. The FSRS model weights themselves are always the algorithm's published defaults — they are not stored, not editable, and not affected by this button.",
+                        name: "Reset scheduling parameters",
+                        desc: "Restore the default FSRS algorithm retention and interval parameters.",
                         action: (): void => {
                             const d = DEFAULT_SETTINGS;
                             const cur = this.plugin.data.settings;
@@ -344,7 +331,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         // past the previous, so saturated intervals land a day or
                         // two above the limit. That ordering is what the interval
                         // previews depend on, so it is not clamped away.
-                        desc: "The longest interval FSRS will aim for, in days. Once a card reaches this ceiling the better answers may still land a day or two beyond it, so that the response buttons stay in order.",
+                        desc: "The maximum amount of days mature cards will be scheduled for.",
                         control: { type: "slider", key: "maximumInterval", min: 7, max: 36525, step: 1 },
                     },
                     {
@@ -418,14 +405,17 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 ],
             },
 
-            // Convert SM-2 cards (FSRS plan P5.3). Last group in the tab.
+            // Migrate and Reset. Last group in the tab. The converter (FSRS plan
+            // P5.3) rewrites notes in place on a single click with no
+            // confirmation, which is why it sits here rather than beside the
+            // sliders.
             {
                 type: "group",
-                heading: "Convert SM-2 cards",
+                heading: "Migrate Flashcards",
                 items: [
                     {
-                        name: "Convert vault to FSRS",
-                        desc: "Rewrites your pre-FSRS cards to the FSRS format. Only cards under your root deck tags (and their subdecks) are touched, so notes outside your decks are left alone.",
+                        name: "Convert legacy cards to FSRS",
+                        desc: "Opens a modal that allows you to convert cards scheduled with the legacy SM-2 html-comment format into the current FSRS format introduced in Euphoric Flashcards 2.0.0. Only cards of registered decks and their subdecks are converted. Back up your vault before attempting this action.",
                         action: (): void => { void this.runConverter(); },
                     },
                 ],
@@ -436,14 +426,19 @@ export class EuphoricSettingsTab extends PluginSettingTab {
     // The one-time SM-2 to FSRS conversion (plan §B5).
     //
     // A dry run goes first, so a vault with nothing to convert reports that and
-    // writes nothing. It is not a confirmation step: this button converts on the
-    // first click, by design for now.
+    // writes nothing. When there is work to do its figures are shown in a
+    // confirmation (ConvertConfirmModal) and the write only happens on confirm,
+    // so the numbers the user approves are the numbers that get applied.
     //
     // The histogram is rebuilt afterwards (§P5.6) because every converted card
     // has just gained a due date the old scan could not read.
     private async runConverter(): Promise<void> {
         if (this.converting) return;
         this.converting = true;
+        // The modal takes the lock over when it opens, because the decision is
+        // the user's and may take as long as they like. Every path out of it
+        // releases the lock, including Escape and a click outside.
+        let modalHoldsLock = false;
         try {
             const rootTags = this.plugin.data.settings.rootDeckTags;
             const dryRun = await runConversion(this.app.vault, { write: false, rootTags });
@@ -452,6 +447,30 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 return;
             }
 
+            modalHoldsLock = true;
+            new ConvertConfirmModal(
+                this.app,
+                this.plugin.data.settings,
+                dryRun,
+                () => { void this.writeConversion(rootTags); },
+                () => { this.converting = false; },
+            ).open();
+        } catch (err) {
+            console.error("EuphoricFlashcards: conversion dry run failed", err);
+            new Notice("Conversion failed. See the developer console.");
+        } finally {
+            if (!modalHoldsLock) {
+                this.converting = false;
+                this.update();
+            }
+        }
+    }
+
+    // The second pass, run only once the user has confirmed the dry run's
+    // figures. The histogram is rebuilt afterwards (P5.6) because every
+    // converted card has just gained a due date the old scan could not read.
+    private async writeConversion(rootTags: string[]): Promise<void> {
+        try {
             const report = await runConversion(this.app.vault, { write: true, rootTags });
             await this.plugin.histogramStore.rebuild(this.app.vault);
             await this.plugin.saveData_();

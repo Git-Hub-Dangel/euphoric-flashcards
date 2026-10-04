@@ -100,6 +100,8 @@ describe("describeReport", () => {
         alreadyFsrs: 0,
         malformed: 0,
         errors: [],
+        affected: [],
+        decks: {},
     };
 
     it("uses the conditional voice for a dry run", () => {
@@ -183,5 +185,76 @@ describe("runConversion deck scoping", () => {
         const report = await runConversion(vault, { write: true, rootTags: ROOTS });
         expect(report.commentsConverted).toBe(1);
         expect(files["a.md"]).not.toContain(LEGACY);
+    });
+});
+
+// The detail the confirmation dialog shows. This is the data the user approves,
+// so the dry run must report exactly what the write will do.
+describe("runConversion affected files and decks", () => {
+    it("lists every affected note with its card count", async () => {
+        const { vault } = fakeVault({
+            "a.md": `#espanol\nuno - one\n${LEGACY}\ndos - two\n${LEGACY}\n`,
+            "b.md": `#espanol\ntres - three\n${LEGACY}\n`,
+            "clean.md": "#espanol\nno cards here\n",
+            "outside.md": `x - y\n${LEGACY}\n`,
+        });
+        const report = await runConversion(vault, { write: false, rootTags: ROOTS });
+
+        expect(report.commentsConverted).toBe(3);
+        // Only notes with convertible cards appear, so neither the clean note
+        // nor the out-of-deck note is listed.
+        expect(report.affected.map(f => f.path).sort()).toEqual(["a.md", "b.md"]);
+        expect(report.affected.find(f => f.path === "a.md")?.cards).toBe(2);
+        expect(report.affected.find(f => f.path === "b.md")?.cards).toBe(1);
+    });
+
+    it("attributes cards to the deck tag in effect, preserving how it was written", async () => {
+        const { vault } = fakeVault({
+            "a.md": [
+                "#Espanol/Verbos",
+                "hablar - to speak",
+                LEGACY,
+                "",
+                "#espanol/sustantivos",
+                "casa - house",
+                LEGACY,
+                "mesa - table",
+                LEGACY,
+                "",
+            ].join("\n"),
+        });
+        const report = await runConversion(vault, { write: false, rootTags: ROOTS });
+
+        expect(report.decks).toEqual({ "#Espanol/Verbos": 1, "#espanol/sustantivos": 2 });
+    });
+
+    it("aggregates one deck across several notes", async () => {
+        const { vault } = fakeVault({
+            "a.md": `#espanol\nuno - one\n${LEGACY}\n`,
+            "b.md": `#espanol\ndos - two\n${LEGACY}\n`,
+        });
+        const report = await runConversion(vault, { write: false, rootTags: ROOTS });
+        expect(report.decks).toEqual({ "#espanol": 2 });
+    });
+
+    it("reports the same detail on the dry run and the write", async () => {
+        const build = (): Record<string, string> => ({
+            "a.md": `#espanol/verbos\nuno - one\n${LEGACY}\ndos - two\n${LEGACY}\n`,
+            "b.md": `#espanol\ntres - three\n${LEGACY}\n`,
+            "outside.md": `x - y\n${LEGACY}\n`,
+        });
+        const dry = await runConversion(fakeVault(build()).vault, { write: false, rootTags: ROOTS });
+        const wet = await runConversion(fakeVault(build()).vault, { write: true, rootTags: ROOTS });
+
+        expect(wet.affected).toEqual(dry.affected);
+        expect(wet.decks).toEqual(dry.decks);
+        expect(wet.commentsConverted).toBe(dry.commentsConverted);
+    });
+
+    it("attributes nothing when the note is out of scope", async () => {
+        const { vault } = fakeVault({ "outside.md": `x - y\n${LEGACY}\n` });
+        const report = await runConversion(vault, { write: false, rootTags: ROOTS });
+        expect(report.affected).toEqual([]);
+        expect(report.decks).toEqual({});
     });
 });
