@@ -81,7 +81,7 @@ export const DEFAULT_SETTINGS: EuphoricSettings = {
     ],
 
     defaultCardSide: "Shuffle",
-    showIntervalOnButtons: true,
+    showIntervalOnButtons: false,
     showKeybindingsOnDesktop: true,
 
     defaultConjureSentencesSide: "Shuffle",

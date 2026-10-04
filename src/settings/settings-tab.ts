@@ -195,7 +195,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Word selection method",
-                        desc: "Optimised: assures that the selection sprinkles in few mature cards alongside the predominant pool of new cards to help you conjure cohesively. \n\nRandom: arbitrary random draw",
+                        desc: "Optimised: assures that the selection sprinkles in few mature cards alongside new cards. \n\nRandom: arbitrary random draw",
                         control: {
                             type: "dropdown",
                             key: "conjureSentencesSelection",
@@ -204,7 +204,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Enable sentence deposit",
-                        desc: "When on, sentence exercises show an input below the word list. Pressing 'Good' appends what you typed to the deposit inbox note as a new line. Works in Conjure Sentences and in the sentence steps of Learn mode.",
+                        desc: "When on, sentence exercises will show a text-input field to write your sentences to. This feature requires a note to be linked as the inbox in the setting below.",
                         control: {
                             type: "toggle",
                             key: "enableSentenceDeposit",
@@ -331,7 +331,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                         // past the previous, so saturated intervals land a day or
                         // two above the limit. That ordering is what the interval
                         // previews depend on, so it is not clamped away.
-                        desc: "The maximum amount of days mature cards will be scheduled for.",
+                        desc: "The maximum interval (in days) cards can be scheduled for.",
                         control: { type: "slider", key: "maximumInterval", min: 7, max: 36525, step: 1 },
                     },
                     {
