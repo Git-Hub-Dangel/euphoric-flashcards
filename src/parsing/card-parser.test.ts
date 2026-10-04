@@ -7,7 +7,8 @@ import {
     cardReveal,
     withUpdatedSchedules,
 } from "src/parsing/card-parser";
-import { RepItemScheduleInfoOsr } from "src/scheduling/osr";
+import type { ScheduleInfo } from "src/scheduling/fsrs";
+import { sched } from "src/learn/test-helpers";
 import { setupStaticDateProvider } from "src/scheduling/dates";
 
 beforeEach(() => {
@@ -176,27 +177,28 @@ describe("parseCard — multi-line cards", () => {
 
 describe("parseCard — SR comment handling", () => {
     it("parses schedules from SR comment on last line", () => {
-        const lines = ["gato - cat <!--SR:!2026-09-20,4,270!2026-09-25,6,250-->"];
-        const card = parseCard(lines, 0)!;
-        const front = card.schedules[0] as RepItemScheduleInfoOsr;
-        const back = card.schedules[1] as RepItemScheduleInfoOsr;
-        expect(front.interval).toBe(4);
-        expect(front.latestEase).toBe(270);
-        expect(back.interval).toBe(6);
-        expect(back.latestEase).toBe(250);
-        expect(card.originalComment).toBe("<!--SR:!2026-09-20,4,270!2026-09-25,6,250-->");
+        const comment = "<!--SR:!2026-09-20,4,5.5,3,1,2,2026-09-16!2026-09-25,6,4.5,2,0,2,2026-09-19-->";
+        const card = parseCard([`gato - cat ${comment}`], 0)!;
+        const front = card.schedules[0] as ScheduleInfo;
+        const back = card.schedules[1] as ScheduleInfo;
+        expect(front.stability).toBe(4);
+        expect(front.difficulty).toBe(5.5);
+        expect(front.lapses).toBe(1);
+        expect(back.stability).toBe(6);
+        expect(back.difficulty).toBe(4.5);
+        expect(card.originalComment).toBe(comment);
     });
 
     it("SR comment on last line of multi-line card", () => {
         const lines = [
             "gato --",
             "domestic feline --",
-            "cat <!--SR:!2026-09-20,4,270-->",
+            "cat <!--SR:!2026-09-20,4,5.5,3,1,2,2026-09-16-->",
         ];
         const card = parseCard(lines, 0)!;
         expect(card.fields.translation).toBe("cat");
-        const front = card.schedules[0] as RepItemScheduleInfoOsr;
-        expect(front.interval).toBe(4);
+        const front = card.schedules[0] as ScheduleInfo;
+        expect(front.stability).toBe(4);
         expect(card.schedules[1]).toBeNull();
     });
 
@@ -209,7 +211,7 @@ describe("parseCard — SR comment handling", () => {
 
     it("continuation marker detection ignores '-->' at end of SR comment", () => {
         // The line ends in "-->" (SR comment) — after stripping, it's "cat", no continuation.
-        const lines = ["gato - cat <!--SR:!2026-09-20,4,270-->"];
+        const lines = ["gato - cat <!--SR:!2026-09-20,4,5.5,3,1,2,2026-09-16-->"];
         const card = parseCard(lines, 0)!;
         expect(card.endLine).toBe(0);
     });
@@ -221,23 +223,23 @@ describe("parseCard — SR comment handling", () => {
 
 describe("parseCard — both-sided card model", () => {
     it("frontFace uses word→translation with seg[0] schedule", () => {
-        const lines = ["gato - cat <!--SR:!2026-09-20,4,270!2026-09-25,6,250-->"];
+        const lines = ["gato - cat <!--SR:!2026-09-20,4,5.5,3,1,2,2026-09-16!2026-09-25,6,4.5,2,0,2,2026-09-19-->"];
         const card = parseCard(lines, 0)!;
         const front = frontFace(card);
         expect(front.side).toBe("front");
         expect(front.prompt).toBe("gato");
         expect(front.answer).toBe("cat");
-        expect((front.schedule as RepItemScheduleInfoOsr).interval).toBe(4);
+        expect((front.schedule as ScheduleInfo).stability).toBe(4);
     });
 
     it("backFace uses translation→word with seg[1] schedule", () => {
-        const lines = ["gato - cat <!--SR:!2026-09-20,4,270!2026-09-25,6,250-->"];
+        const lines = ["gato - cat <!--SR:!2026-09-20,4,5.5,3,1,2,2026-09-16!2026-09-25,6,4.5,2,0,2,2026-09-19-->"];
         const card = parseCard(lines, 0)!;
         const back = backFace(card);
         expect(back.side).toBe("back");
         expect(back.prompt).toBe("cat");
         expect(back.answer).toBe("gato");
-        expect((back.schedule as RepItemScheduleInfoOsr).interval).toBe(6);
+        expect((back.schedule as ScheduleInfo).stability).toBe(6);
     });
 
     it("cardReveal returns shared metadata for both sides", () => {
@@ -315,48 +317,51 @@ describe("parseCard — rejection", () => {
 
 describe("withUpdatedSchedules", () => {
     it("migrates legacy inline SR to a dedicated line below the card (single-line card)", () => {
-        const lines = ["gato - cat <!--SR:!2026-09-01,2,250-->"];
+        const lines = ["gato - cat <!--SR:!2026-09-01,2,5,1,0,2,2026-08-30-->"];
         const card = parseCard(lines, 0)!;
-        const newFront = RepItemScheduleInfoOsr.fromDueDateStr("2026-09-20", 4, 270, 0);
-        const newBack = RepItemScheduleInfoOsr.fromDueDateStr("2026-09-25", 6, 260, 0);
-        const updated = withUpdatedSchedules(card, [newFront, newBack], 250);
+        const newFront = sched("2026-09-20", 4, { difficulty: 5.5, reps: 3, lapses: 1 });
+        const newBack = sched("2026-09-25", 6, { difficulty: 4.5, reps: 2, lapses: 0 });
+        const updated = withUpdatedSchedules(card, [newFront, newBack]);
         expect(updated).toHaveLength(2);
         expect(updated[0]).toBe("gato - cat");
-        expect(updated[1]).toBe("<!--SR:!2026-09-20,4,270!2026-09-25,6,260-->");
+        expect(updated[1]).toBe(
+            "<!--SR:!2026-09-20,4,5.5,3,1,2,2026-09-16!2026-09-25,6,4.5,2,0,2,2026-09-19-->",
+        );
     });
 
     it("appends SR comment when card had none (multi-line card)", () => {
         const lines = ["gato --", "domestic feline --", "cat"];
         const card = parseCard(lines, 0)!;
-        const newFront = RepItemScheduleInfoOsr.fromDueDateStr("2026-09-20", 4, 270, 0);
-        const updated = withUpdatedSchedules(card, [newFront, null], 250);
+        const newFront = sched("2026-09-20", 4);
+        const updated = withUpdatedSchedules(card, [newFront, null]);
         expect(updated).toHaveLength(4);
         expect(updated[0]).toBe("gato --");
         expect(updated[1]).toBe("domestic feline --");
         expect(updated[2]).toBe("cat");
-        expect(updated[3]).toMatch(/^<!--SR:!2026-09-20,4,270!.+-->$/);
+        expect(updated[3]).toMatch(/^<!--SR:!2026-09-20,4,.+!2000-01-01,.+-->$/);
     });
 
     it("replaces an existing next-line SR without changing line count", () => {
-        const lines = ["gato - cat", "<!--SR:!2026-09-01,2,250-->"];
+        const lines = ["gato - cat", "<!--SR:!2026-09-01,2,5,1,0,2,2026-08-30-->"];
         const card = parseCard(lines, 0)!;
         expect(card.rawLines).toHaveLength(2);
-        const newFront = RepItemScheduleInfoOsr.fromDueDateStr("2026-09-20", 4, 270, 0);
-        const updated = withUpdatedSchedules(card, [newFront, null], 250);
+        const newFront = sched("2026-09-20", 4);
+        const updated = withUpdatedSchedules(card, [newFront, null]);
         expect(updated).toHaveLength(2);
         expect(updated[0]).toBe("gato - cat");
-        expect(updated[1]).toMatch(/^<!--SR:!2026-09-20,4,270!.+-->$/);
+        expect(updated[1]).toMatch(/^<!--SR:!2026-09-20,4,.+!2000-01-01,.+-->$/);
     });
 
     it("round-trip: parse, update, re-parse yields new schedules", () => {
         const lines = ["gato - cat"];
         const card = parseCard(lines, 0)!;
-        const newFront = RepItemScheduleInfoOsr.fromDueDateStr("2026-09-20", 4, 270, 0);
-        const newBack = RepItemScheduleInfoOsr.fromDueDateStr("2026-09-25", 6, 260, 0);
-        const updated = withUpdatedSchedules(card, [newFront, newBack], 250);
+        const newFront = sched("2026-09-20", 4, { difficulty: 5.5 });
+        const newBack = sched("2026-09-25", 6, { difficulty: 4.5 });
+        const updated = withUpdatedSchedules(card, [newFront, newBack]);
         const reparsed = parseCard(updated, 0)!;
-        expect((reparsed.schedules[0] as RepItemScheduleInfoOsr).interval).toBe(4);
-        expect((reparsed.schedules[1] as RepItemScheduleInfoOsr).interval).toBe(6);
+        expect((reparsed.schedules[0] as ScheduleInfo).stability).toBe(4);
+        expect((reparsed.schedules[0] as ScheduleInfo).difficulty).toBe(5.5);
+        expect((reparsed.schedules[1] as ScheduleInfo).stability).toBe(6);
         expect(reparsed.fields.word).toBe("gato");
         expect(reparsed.fields.translation).toBe("cat");
     });

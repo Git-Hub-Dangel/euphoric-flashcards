@@ -1,5 +1,4 @@
 export class DueDateHistogram {
-    public static dueNowNDays: number = 0;
     dueDatesMap: Map<number, number> = new Map<number, number>();
 
     constructor(rec: Record<number, number> | null = null) {
@@ -9,10 +8,6 @@ export class DueDateHistogram {
                 this.dueDatesMap.set(Number(key), value);
             });
         }
-    }
-
-    get dueNotesCount(): number {
-        return this.dueDatesMap.get(DueDateHistogram.dueNowNDays) ?? 0;
     }
 
     hasEntryForDays(days: number): boolean {

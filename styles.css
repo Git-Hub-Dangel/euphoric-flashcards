@@ -138,7 +138,7 @@
 
 /* Keyboard-shortcut badge. Hidden on mobile/tablet unconditionally. */
 @media (max-width: 768px) {
-    .ef-btn-key { display: none !important; }
+    .ef-btn-key.ef-btn-key { display: none; }
 }
 
 .ef-btn-key {
@@ -458,8 +458,8 @@
 .ef-edit-error {
     margin-top: 8px;
     padding: 8px 10px;
-    background: color-mix(in srgb, #e53935 15%, transparent);
-    border: 1px solid color-mix(in srgb, #e53935 40%, transparent);
+    background: color-mix(in srgb, var(--text-error) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--text-error) 40%, transparent);
     border-radius: 4px;
     color: var(--text-normal);
     font-size: 0.85em;
@@ -905,23 +905,6 @@
 .ef-stagger-13 { --ef-stagger-delay: 390ms; }
 .ef-stagger-14 { --ef-stagger-delay: 420ms; }
 
-/* Global kill switch — set when animationDurationMs = 0. */
-.ef-anim-off .ef-anim-in {
-    animation: none;
-}
-
-/* Accessibility: respect the user's OS-level reduced motion preference. */
-@media (prefers-reduced-motion: reduce) {
-    .ef-anim-in,
-    .ef-cc-pill.ef-fading,
-    .ef-deposit-bar,
-    .ef-progress-flash,
-    .ef-deck-chevron,
-    .modal.ef-modal-leaving .modal-content {
-        animation: none;
-        transition: none;
-    }
-}
 
 /* Deck chevron: smooth rotate on expand/collapse. */
 .ef-deck-chevron {
@@ -944,4 +927,103 @@
 /* Modal cross-fade: fade the leaving modal's content before close-then-open. */
 .modal.ef-modal-leaving .modal-content {
     animation: ef-fade-out 120ms ease both;
+}
+
+/* ── Convert confirmation ────────────────────────────────── */
+
+.ef-convert-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ef-convert-summary {
+    font-weight: 600;
+}
+
+.ef-convert-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ef-convert-section-title {
+    color: var(--text-muted);
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.ef-convert-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* The note list is the long one, so it scrolls instead of being truncated. */
+.ef-convert-list-scroll {
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.ef-convert-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+}
+
+.ef-convert-name {
+    overflow-wrap: anywhere;
+}
+
+.ef-convert-count {
+    flex: 0 0 auto;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.ef-convert-note {
+    color: var(--text-muted);
+    font-size: 0.9em;
+}
+
+.ef-convert-warning {
+    color: var(--text-warning);
+    font-size: 0.9em;
+}
+
+/* Motion kill switch. Covers every animation and transition the plugin defines,
+   not just the entrance stagger. Set as a class when animationDurationMs is 0,
+   and forced by the OS reduced motion preference.
+
+   This must stay below every animated rule above it. A media query adds no
+   specificity, so an earlier block at equal specificity loses to the live rule
+   on document order and silently does nothing. */
+.ef-anim-off .ef-anim-in,
+.ef-anim-off .ef-progress-flash,
+.ef-anim-off .ef-cc-pill.ef-fading,
+.ef-anim-off .ef-deck-chevron,
+.ef-anim-off .ef-btn,
+.ef-anim-off .ef-deck-row,
+.ef-anim-off .ef-deposit-bar,
+.ef-anim-off.modal.ef-modal-leaving .modal-content,
+.ef-anim-off .modal.ef-modal-leaving .modal-content {
+    animation: none;
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ef-anim-in,
+    .ef-progress-flash,
+    .ef-cc-pill.ef-fading,
+    .ef-deck-chevron,
+    .ef-btn,
+    .ef-deck-row,
+    .ef-deposit-bar,
+    .modal.ef-modal-leaving .modal-content {
+        animation: none;
+        transition: none;
+    }
 }

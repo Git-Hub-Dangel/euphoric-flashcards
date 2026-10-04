@@ -172,7 +172,7 @@ describe("pickSentenceWords", () => {
     it("draws exactly one anchor when wordCount>=2 and anchors non-empty", () => {
         const eligible = [cardA];
         const anchors: AnchorLocation[] = [
-            { ...makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)]), interval: 60 },
+            { ...makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)]), stability: 60 },
         ];
         const states = new Map<typeof cardA["card"], GroupCardState>();
         states.set(cardA.card, state());
@@ -191,7 +191,7 @@ describe("pickSentenceWords", () => {
     it("wordCount=1 skips the anchor slot even when anchors exist", () => {
         const eligible = [cardA];
         const anchors: AnchorLocation[] = [
-            { ...makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)]), interval: 60 },
+            { ...makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)]), stability: 60 },
         ];
         const states = new Map([[cardA.card, state()]]);
         const picks = pickSentenceWords({
@@ -207,13 +207,14 @@ describe("pickSentenceWords", () => {
         expect(picks[0]!.isAnchor).toBe(false);
     });
 
-    it("spreads anchor draws instead of locking onto the shortest interval", () => {
-        // The old 1/interval weighting handed the 25d anchor over half of all
-        // draws. The clamped tilt plus fuzz keeps every anchor in play.
-        const intervals = [25, 90, 120, 200, 365, 400];
-        const anchors: AnchorLocation[] = intervals.map(iv => ({
+    it("spreads anchor draws instead of locking onto the lowest stability", () => {
+        // The old bare 1/x weighting handed the weakest anchor over half of all
+        // draws. The clamped tilt plus fuzz keeps every anchor in play. The
+        // quantity is stability now; the sampler's properties are unchanged.
+        const stabilities = [25, 90, 120, 200, 365, 400];
+        const anchors: AnchorLocation[] = stabilities.map(iv => ({
             ...makeCard([sched("2030-01-01", iv), sched("2030-01-01", iv)], { word: `a${iv}` }),
-            interval: iv,
+            stability: iv,
         }));
         const states = new Map([[cardA.card, state()]]);
         const counts = new Map<string, number>();
@@ -232,7 +233,7 @@ describe("pickSentenceWords", () => {
             const w = pick.card.fields.word;
             counts.set(w, (counts.get(w) ?? 0) + 1);
         }
-        const shares = intervals.map(iv => (counts.get(`a${iv}`) ?? 0) / draws);
+        const shares = stabilities.map(iv => (counts.get(`a${iv}`) ?? 0) / draws);
         expect(Math.max(...shares)).toBeLessThan(0.45);
         expect(Math.min(...shares)).toBeGreaterThan(0.05);
     });
@@ -241,8 +242,8 @@ describe("pickSentenceWords", () => {
         const seen = makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)], { word: "seen" });
         const unseen = makeCard([sched("2030-01-01", 60), sched("2030-01-01", 60)], { word: "unseen" });
         const anchors: AnchorLocation[] = [
-            { ...seen, interval: 60 },
-            { ...unseen, interval: 60 },
+            { ...seen, stability: 60 },
+            { ...unseen, stability: 60 },
         ];
         const states = new Map([[cardA.card, state()]]);
         const rng = mulberry32(11);

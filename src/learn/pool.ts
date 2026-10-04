@@ -1,8 +1,9 @@
 import type { ParsedCard } from "src/parsing";
-import type { ScheduleInfo } from "src/persistence";
+import type { ScheduleInfo } from "src/scheduling/fsrs";
+import { isFaceNew } from "src/scheduling/fsrs";
 import { isFaceDue } from "src/scheduling/due";
 import { fisherYates } from "src/utils/shuffle";
-import { LEARN_ANCHOR_MIN_INTERVAL_DAYS, LEARN_MATURE_INTERVAL_DAYS } from "src/learn/constants";
+import { LEARN_ANCHOR_MIN_STABILITY, LEARN_MATURE_STABILITY } from "src/learn/constants";
 
 export interface CardLocation {
     card: ParsedCard;
@@ -10,7 +11,9 @@ export interface CardLocation {
 }
 
 export interface AnchorLocation extends CardLocation {
-    interval: number;
+    // Stability, not an interval. Named for the field it holds so the anchor
+    // weighting cannot quietly keep reading one as the other.
+    stability: number;
 }
 
 export interface LearnPools {
@@ -21,46 +24,67 @@ export interface LearnPools {
     matureAnchors: AnchorLocation[];
 }
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// Probability of recalling one face, in [0, 1], measured at the instant passed.
+// Injected rather than constructed here so this module stays pure ranking logic:
+// the modal supplies a closure over the live FSRS engine, and tests supply the
+// real engine too (a stubbed curve would let a sign error through).
+export type RetrievabilityFn = (schedule: ScheduleInfo, at: Date) => number;
 
-function minSeenInterval(card: ParsedCard): number {
+// Min across faces, deliberately: a card is only as well known as its weaker
+// direction. This is a pedagogical rule, not an artefact of SM-2, and it had to
+// survive the move to FSRS quantities (plan §B3).
+function minSeenStability(card: ParsedCard): number {
     let m = Infinity;
     for (const s of card.schedules) {
-        if (s !== null && s.interval < m) m = s.interval;
+        if (!isFaceNew(s) && s!.stability < m) m = s!.stability;
     }
     return m;
 }
 
-function minSeenEase(card: ParsedCard): number {
-    let m = Infinity;
-    for (const s of card.schedules) {
-        if (s !== null && s.latestEase < m) m = s.latestEase;
-    }
-    return m === Infinity ? 0 : m;
-}
-
-// Overdue ratio per face: 1 + days_overdue / interval. A face due exactly
-// today scores 1; a face overdue by its full interval scores 2.
-function overdueRatio(schedule: ScheduleInfo, todayMs: number): number {
-    const days = (todayMs - schedule.dueDate.valueOf()) / MS_PER_DAY;
-    return 1 + days / schedule.interval;
-}
-
-function maxOverdueRatio(card: ParsedCard, today: Date): number {
-    const todayMs = today.valueOf();
+// The shakiest face's difficulty. ⚠️ Sign flip from the ease this replaced: low
+// ease meant a struggling card, and so does *high* difficulty. Read the wrong way
+// round this silently serves the user's easiest cards first and nothing else in
+// the suite would notice (plan §C3) — hence the explicit ordering tests.
+//
+// Max across faces, mirroring minSeenStability: one shaky direction is enough to
+// promote a card.
+function maxSeenDifficulty(card: ParsedCard): number {
     let m = -Infinity;
     for (const s of card.schedules) {
-        if (s !== null && isFaceDue(s, today)) {
-            const r = overdueRatio(s, todayMs);
-            if (r > m) m = r;
-        }
+        if (!isFaceNew(s) && s!.difficulty > m) m = s!.difficulty;
+    }
+    return m === -Infinity ? 0 : m;
+}
+
+// The card's urgency: the lowest recall probability across its due faces.
+// Ascending order of this value is the due ranking (plan §B3) — least likely to
+// be remembered goes first. It replaces the old overdueRatio outright, and with
+// it the last place SM-2's `interval` was still being read.
+//
+// ⚠️ New faces are skipped, not merely absent. get_retrievability returns exactly
+// 0 for State.New, and 0 is the *most urgent* slot in an ascending sort, so a New
+// face reaching this function would silently jump the entire queue (plan P4.2b).
+// classifyPools already routes such cards to newCards, but this function does not
+// rely on that: it is defensive in its own right.
+function minRetrievability(card: ParsedCard, today: Date, retrievability: RetrievabilityFn): number {
+    let m = Infinity;
+    for (const s of card.schedules) {
+        if (isFaceNew(s)) continue;
+        if (!isFaceDue(s, today)) continue;
+        const r = retrievability(s!, today);
+        if (r < m) m = r;
     }
     return m;
 }
 
+// `today` is the session day from globalDateProvider.today, not a raw clock
+// reading. Under a startOfDay boundary it resolves to the previous calendar day
+// before the cutoff (P6.3), so both the due split and the retrievability the
+// ranking reads move together with it.
 export function classifyPools(
     cards: readonly CardLocation[],
     today: Date,
+    retrievability: RetrievabilityFn,
     rng: () => number = Math.random,
 ): LearnPools {
     const newCards: CardLocation[] = [];
@@ -71,40 +95,47 @@ export function classifyPools(
 
     for (const loc of cards) {
         const { card } = loc;
-        const hasNew = card.schedules[0] === null || card.schedules[1] === null;
-        if (hasNew) {
+        // A face is new when it has no schedule at all, or carries State.New.
+        if (isFaceNew(card.schedules[0]) || isFaceNew(card.schedules[1])) {
             newCards.push(loc);
             continue;
         }
-        const iv = minSeenInterval(card);
+        const stability = minSeenStability(card);
         const hasDue =
-            (card.schedules[0] !== null && isFaceDue(card.schedules[0], today)) ||
-            (card.schedules[1] !== null && isFaceDue(card.schedules[1], today));
-        const mature = iv >= LEARN_MATURE_INTERVAL_DAYS;
+            isFaceDue(card.schedules[0], today) || isFaceDue(card.schedules[1], today);
+        const mature = stability >= LEARN_MATURE_STABILITY;
         if (hasDue) {
             (mature ? matureDue : youngDue).push(loc);
             continue;
         }
         // A semi mature card (past the anchor floor, short of maturity) is both
-        // group filler and anchor material. The two pools overlap for that
-        // band, so sampling filters anchors against cards the session has
-        // already used and shiftLocationsForDelta dedupes by card identity.
+        // group filler and anchor material. The two pools overlap for that band,
+        // so sampling filters anchors against cards the session has already used
+        // and shiftLocationsForDelta dedupes by card identity.
         if (!mature) youngFiller.push(loc);
-        if (iv >= LEARN_ANCHOR_MIN_INTERVAL_DAYS) matureAnchors.push({ ...loc, interval: iv });
+        if (stability >= LEARN_ANCHOR_MIN_STABILITY) {
+            matureAnchors.push({ ...loc, stability });
+        }
     }
 
-    // Rank due pools by descending overdue ratio, tie-break by lowest ease.
+    // Rank due pools by ascending retrievability — least likely to be recalled
+    // first — tie-broken by *highest* difficulty, the shakiest card first.
+    //
+    // The tie-break is load-bearing, not decorative: ts-fsrs floors elapsed time
+    // to whole days, so any two faces last reviewed on the same day with equal
+    // stability return exactly the same retrievability. Ties are the common case,
+    // not the edge case.
     const rankDue = (a: CardLocation, b: CardLocation): number => {
-        const ra = maxOverdueRatio(a.card, today);
-        const rb = maxOverdueRatio(b.card, today);
-        if (rb !== ra) return rb - ra;
-        return minSeenEase(a.card) - minSeenEase(b.card);
+        const ra = minRetrievability(a.card, today, retrievability);
+        const rb = minRetrievability(b.card, today, retrievability);
+        if (ra !== rb) return ra - rb;
+        return maxSeenDifficulty(b.card) - maxSeenDifficulty(a.card);
     };
     matureDue.sort(rankDue);
     youngDue.sort(rankDue);
 
-    // Young filler drawn lowest-ease first when we spill into it.
-    youngFiller.sort((a, b) => minSeenEase(a.card) - minSeenEase(b.card));
+    // Young filler drawn hardest-first when we spill into it.
+    youngFiller.sort((a, b) => maxSeenDifficulty(b.card) - maxSeenDifficulty(a.card));
 
     // New pool is shuffled so thematically adjacent lines disperse.
     fisherYates(newCards, rng);

@@ -1,6 +1,7 @@
 import { App, Modal, setIcon } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import { buildDeckTree, flattenDeckTree } from "src/decks";
+import { globalDateProvider } from "src/scheduling/dates";
 import type { DeckNode, FileLines } from "src/decks";
 import { loadCardsForDeck } from "src/ui/review/load-cards";
 import type { ReviewCard } from "src/ui/review/load-cards";
@@ -90,7 +91,7 @@ export class ConjureSentencesModal extends Modal {
             }))
         );
 
-        const tree = buildDeckTree(fileLines, { rootTags, today: new Date() });
+        const tree = buildDeckTree(fileLines, { rootTags, today: globalDateProvider.today });
         const selectionNode = flattenDeckTree(tree).find(
             n => n.tag.toLowerCase() === this.options.selectionDeckTag.toLowerCase()
         );

@@ -30,11 +30,14 @@ export type LearnStep =
     | { kind: "sentence"; words: SentenceWordSelection[] }
     | { kind: "done"; groupsCompleted: number };
 
-export type FaceAnswer = "Again" | "Okay" | "Good" | "OK";
+// B2 leaves three answers. The post-Again "OK" is gone: under the new contract
+// the first answer on a face writes, so there is nothing for a fourth answer to do.
+export type FaceAnswer = "Again" | "Okay" | "Good";
 
+// B2's rating contract: one write per face per session, produced by whichever
+// answer came first — Again included. `kind` is gone with the reset path.
 export interface WriteIntent {
-    kind: "graded" | "reset";
-    response: ReviewResponse;   // Hard for Okay, Good for Good, Hard for post-Again OK (reset uses it too)
+    response: ReviewResponse;   // Again for Again, Hard for Okay, Good for Good
 }
 
 export interface FaceAnswerOutcome {
@@ -84,7 +87,11 @@ export class LearnSession {
     // anchor pool still spreads across every sentence task.
     private readonly anchorAppearances = new Map<ParsedCard, number>();
     private readonly carried = new Set<ParsedCard>();
-    private readonly writtenFaces = new Set<string>();
+    // Keyed by ParsedCard identity, not by file path + startLine: a write to a
+    // card earlier in the same file shifts every later card's startLine via
+    // shiftLocationsForDelta, so a positional key moves out from under this set
+    // and the no-double-write gate fails open.
+    private readonly writtenFaces = new Map<ParsedCard, Set<0 | 1>>();
 
     private groupsCompleted = 0;
     private seqCounter = 0;
@@ -146,7 +153,14 @@ export class LearnSession {
     // Whether the modal must actually persist a schedule for this item.
     private shouldWrite(item: LearnItem): boolean {
         if (!item.writeEligible) return false;
-        return !this.writtenFaces.has(faceKey(item));
+        return !this.writtenFaces.get(item.card)?.has(item.faceIndex);
+    }
+
+    // Public face of shouldWrite, for B2's preview rule: an interval preview is
+    // rendered if and only if a write will occur. That makes the post-Again
+    // re-drill show three bare buttons, since its write already happened.
+    willWrite(item: LearnItem): boolean {
+        return this.shouldWrite(item);
     }
 
     submitFaceAnswer(item: LearnItem, answer: FaceAnswer): FaceAnswerOutcome {
@@ -157,24 +171,25 @@ export class LearnSession {
         let writeIntent: WriteIntent | null = null;
         const wasPending = this.isFacePending(item);
 
+        // B2: the first answer on a face writes, and nothing else in the session
+        // does. Again is no longer an exception — it writes Rating.Again
+        // immediately, and the reshuffle that follows is pure drill. shouldWrite
+        // is what enforces "first": the modal calls confirmWritten after a
+        // successful write, so the re-drill answer finds the face already written.
         if (answer === "Again") {
             recordAgain(g.states, g.queue, g.idx, item, this.seqCounter, this.opts.rng);
             g.idx++;
-            // Again never writes.
-        } else if (answer === "OK") {
-            // Post-Again reset path.
-            recordClear(g.states, item, ReviewResponse.Hard, true);
-            g.idx++;
             if (this.shouldWrite(item)) {
-                writeIntent = { kind: "reset", response: ReviewResponse.Hard };
+                writeIntent = { response: ReviewResponse.Again };
             }
         } else {
-            // First-pass Okay / Good.
             const response = answer === "Good" ? ReviewResponse.Good : ReviewResponse.Hard;
+            // wasPending distinguishes the post-Again re-drill, which clears the
+            // face without letting a later Okay talk `worst` back up from Again.
             recordClear(g.states, item, response, wasPending);
             g.idx++;
             if (this.shouldWrite(item)) {
-                writeIntent = { kind: "graded", response };
+                writeIntent = { response };
             }
         }
 
@@ -189,7 +204,12 @@ export class LearnSession {
     // Called by the modal after a successful vault write for the given item.
     // Marks the face as written so subsequent sessions the same day skip it.
     confirmWritten(item: LearnItem): void {
-        this.writtenFaces.add(faceKey(item));
+        let faces = this.writtenFaces.get(item.card);
+        if (faces === undefined) {
+            faces = new Set<0 | 1>();
+            this.writtenFaces.set(item.card, faces);
+        }
+        faces.add(item.faceIndex);
     }
 
     // Advance past the current sentence task (user pressed Continue).
@@ -379,8 +399,4 @@ export class LearnSession {
         counts.set(word.card, Math.max(0, prev + delta));
     }
 
-}
-
-function faceKey(item: LearnItem): string {
-    return `${item.filePath}|${item.card.startLine}|${item.faceIndex}`;
 }

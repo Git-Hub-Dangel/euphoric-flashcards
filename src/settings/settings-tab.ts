@@ -1,11 +1,22 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type { SettingDefinitionItem, TFile } from "obsidian";
 import type EuphoricFlashcardsPlugin from "src/main";
 import type { ConstructionConstraintCollection, TypeConfig } from "src/settings/index";
-import { DEFAULT_SETTINGS } from "src/settings/index";
+import {
+    DEFAULT_SETTINGS,
+    REQUEST_RETENTION_MAX,
+    REQUEST_RETENTION_MIN,
+    REQUEST_RETENTION_STEP,
+} from "src/settings/index";
+import { describeReport, runConversion } from "src/migration/convert-vault";
+import { ConvertConfirmModal } from "src/ui/convert-confirm/index";
+import { applyDayBoundary } from "src/scheduling/dates";
 
 export class EuphoricSettingsTab extends PluginSettingTab {
     private readonly plugin: EuphoricFlashcardsPlugin;
+    // Reentrancy guard for the one-time converter. It rewrites notes in place,
+    // so two overlapping runs must not be possible from one button.
+    private converting = false;
 
     constructor(app: App, plugin: EuphoricFlashcardsPlugin) {
         super(app, plugin);
@@ -32,6 +43,10 @@ export class EuphoricSettingsTab extends PluginSettingTab {
             s[key] = value;
         }
         await this.plugin.saveData_();
+        // The day boundary lives on the date provider, not in settings, so the
+        // provider has to be told. Doing it here rather than on modal open means
+        // a session already in progress picks the new boundary up too.
+        if (key === "startOfDay") applyDayBoundary(this.plugin.data.settings.startOfDay);
         // The deposit inbox and notification rows are disabled while the
         // feature is off, so their disabled state has to be re-evaluated.
         if (key === "enableSentenceDeposit") this.update();
@@ -152,7 +167,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Card side for conjuring sentences",
-                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native / proficient language. (e.g. If you use the syntax 'word - translation', then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word in your target language, then apply it.",
+                        desc: "Decide what side of the cards is initially shown to you in sentence forming exercises during Learn mode. I recommend to only use the side that contains the word's translation into your native or proficient language. (e.g. If you use the syntax 'word - translation' then set this setting to 'Back') This way we simulate the real-life situation, in which you'll first need to retrieve the word and then apply it.",
                         control: {
                             type: "dropdown",
                             key: "learnSentenceSide",
@@ -180,7 +195,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Word selection method",
-                        desc: "Optimised: assures that the selection contains an even mix of older and newer cards.\n\nRandom: arbitrary random draw",
+                        desc: "Optimised: assures that the selection sprinkles in few mature cards alongside new cards. \n\nRandom: arbitrary random draw",
                         control: {
                             type: "dropdown",
                             key: "conjureSentencesSelection",
@@ -189,7 +204,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: "Enable sentence deposit",
-                        desc: "When on, sentence exercises show an input below the word list. Pressing 'Good' appends what you typed to the deposit inbox note as a new line. Works in Conjure Sentences and in the sentence steps of Learn mode.",
+                        desc: "When on, sentence exercises will show a text-input field to write your sentences to. This feature requires a note to be linked as the inbox in the setting below.",
                         control: {
                             type: "toggle",
                             key: "enableSentenceDeposit",
@@ -284,49 +299,44 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 heading: "Scheduling",
                 items: [
                     {
-                        name: "Restore Default Settings",
+                        name: "Reset scheduling parameters",
+                        desc: "Restore the default FSRS algorithm retention and interval parameters.",
                         action: (): void => {
                             const d = DEFAULT_SETTINGS;
                             const cur = this.plugin.data.settings;
-                            cur.baseEase = d.baseEase;
-                            cur.easyBonus = d.easyBonus;
-                            cur.defaultIntervalChange = d.defaultIntervalChange;
-                            cur.lapsesIntervalChange = d.lapsesIntervalChange;
+                            cur.requestRetention = d.requestRetention;
                             cur.maximumInterval = d.maximumInterval;
-                            cur.loadBalance = d.loadBalance;
-                            cur.startOfDay = d.startOfDay;
                             void this.plugin.saveData_();
                             this.update();
                         },
                     },
                     {
-                        name: "Base ease",
-                        desc: "Default ease factor for new cards.",
-                        control: { type: "slider", key: "baseEase", min: 100, max: 400, step: 10 },
-                    },
-                    {
-                        name: "Good bonus",
-                        desc: "Interval multiplier applied to cards reviewed as 'Good'",
-                        control: { type: "slider", key: "easyBonus", min: 1.0, max: 2.0, step: 0.05 },
-                    },
-                    {
-                        name: "Okay interval change",
-                        desc: "Interval multiplier applied to cards reviewed as 'Okay'",
-                        control: { type: "slider", key: "defaultIntervalChange", min: 1.0, max: 1.8, step: 0.05 },
-                    },
-                    {
-                        name: "Lapse interval change",
-                        desc: "Interval multiplier applied to cards reviewed as 'Okay' after they were reshuffled into the session due to being toggled as 'Again'. The default value resets the card's progress completely.",
-                        control: { type: "slider", key: "lapsesIntervalChange", min: 0.01, max: 1.0, step: 0.01 },
+                        name: "Target retention",
+                        desc: "This value tells the scheduling algorithm what percentual amount of cards you should be able to guess correctly upon review. Lower values mean longer intervals and less reviewing, at the cost of more forgetting. (At the default value you should effectively recall 90%+ of your due cards per full review session)",
+                        control: {
+                            type: "slider",
+                            key: "requestRetention",
+                            min: REQUEST_RETENTION_MIN,
+                            max: REQUEST_RETENTION_MAX,
+                            step: REQUEST_RETENTION_STEP,
+                        },
                     },
                     {
                         name: "Maximum interval",
-                        desc: "Cards will not be scheduled beyond this many days.",
+                        // P3.10: the old wording ("Cards will not be scheduled
+                        // beyond this many days") was true under SM-2 and became
+                        // false the moment FSRS took over. maximum_interval is a
+                        // soft ceiling: FSRS clamps each grade to it and then
+                        // enforces again < hard < good < easy by bumping each
+                        // past the previous, so saturated intervals land a day or
+                        // two above the limit. That ordering is what the interval
+                        // previews depend on, so it is not clamped away.
+                        desc: "The maximum interval (in days) cards can be scheduled for.",
                         control: { type: "slider", key: "maximumInterval", min: 7, max: 36525, step: 1 },
                     },
                     {
                         name: "Start of day",
-                        desc: "Cards whose due date is today only become available after this time. Set to e.g. 02:00:00 if you study past midnight and want yesterday's cards to stay due until then. Format: HH:MM:SS.",
+                        desc: "Cards whose due date is today only become available after this time. Set to e.g. 02:00:00 if you study past midnight and want yesterday's cards to stay due until then. Format: HH:MM:SS, and anything else falls back to midnight.",
                         control: {
                             type: "text",
                             key: "startOfDay",
@@ -394,6 +404,83 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                     },
                 ],
             },
+
+            // Migrate and Reset. Last group in the tab. The converter (FSRS plan
+            // P5.3) rewrites notes in place on a single click with no
+            // confirmation, which is why it sits here rather than beside the
+            // sliders.
+            {
+                type: "group",
+                heading: "Migrate Flashcards",
+                items: [
+                    {
+                        name: "Convert legacy cards to FSRS",
+                        desc: "Opens a modal that allows you to convert cards scheduled with the legacy SM-2 html-comment format into the current FSRS format introduced in Euphoric Flashcards 2.0.0. Only cards of registered decks and their subdecks are converted. Back up your vault before attempting this action.",
+                        action: (): void => { void this.runConverter(); },
+                    },
+                ],
+            },
         ];
+    }
+
+    // The one-time SM-2 to FSRS conversion (plan §B5).
+    //
+    // A dry run goes first, so a vault with nothing to convert reports that and
+    // writes nothing. When there is work to do its figures are shown in a
+    // confirmation (ConvertConfirmModal) and the write only happens on confirm,
+    // so the numbers the user approves are the numbers that get applied.
+    //
+    // The histogram is rebuilt afterwards (§P5.6) because every converted card
+    // has just gained a due date the old scan could not read.
+    private async runConverter(): Promise<void> {
+        if (this.converting) return;
+        this.converting = true;
+        // The modal takes the lock over when it opens, because the decision is
+        // the user's and may take as long as they like. Every path out of it
+        // releases the lock, including Escape and a click outside.
+        let modalHoldsLock = false;
+        try {
+            const rootTags = this.plugin.data.settings.rootDeckTags;
+            const dryRun = await runConversion(this.app.vault, { write: false, rootTags });
+            if (dryRun.commentsConverted === 0) {
+                new Notice(describeReport(dryRun, true));
+                return;
+            }
+
+            modalHoldsLock = true;
+            new ConvertConfirmModal(
+                this.app,
+                this.plugin.data.settings,
+                dryRun,
+                () => { void this.writeConversion(rootTags); },
+                () => { this.converting = false; },
+            ).open();
+        } catch (err) {
+            console.error("EuphoricFlashcards: conversion dry run failed", err);
+            new Notice("Conversion failed. See the developer console.");
+        } finally {
+            if (!modalHoldsLock) {
+                this.converting = false;
+                this.update();
+            }
+        }
+    }
+
+    // The second pass, run only once the user has confirmed the dry run's
+    // figures. The histogram is rebuilt afterwards (P5.6) because every
+    // converted card has just gained a due date the old scan could not read.
+    private async writeConversion(rootTags: string[]): Promise<void> {
+        try {
+            const report = await runConversion(this.app.vault, { write: true, rootTags });
+            await this.plugin.histogramStore.rebuild(this.app.vault);
+            await this.plugin.saveData_();
+            new Notice(describeReport(report, false));
+        } catch (err) {
+            console.error("EuphoricFlashcards: conversion failed", err);
+            new Notice("Conversion failed. See the developer console.");
+        } finally {
+            this.converting = false;
+            this.update();
+        }
     }
 }

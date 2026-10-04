@@ -1,4 +1,6 @@
 import { parseScheduleComment } from "src/persistence/comment-parser";
+import { isFaceDue } from "src/scheduling/due";
+import { startOfDay } from "src/scheduling/dates";
 
 export interface CardLocation {
     filePath: string;
@@ -94,17 +96,21 @@ function lineIsNew(line: string): boolean {
     return !SR_COMMENT_RE.test(line);
 }
 
-// returns true if the line has a schedule comment with at least one side due
-function lineIsDue(line: string, todayMidnight: number): boolean {
+// returns true if the line has a schedule comment with at least one side due.
+//
+// Routed through the shared isFaceDue rather than comparing due dates locally:
+// this module delegates parsing to comment-parser, so if the due date ever stops
+// being field 0 of a segment, cards silently vanish from the Due and New counts
+// while Total stays correct (plan §C3). One definition of "due" and an explicit
+// regression test in decks.test.ts are what guard that.
+function lineIsDue(line: string, now: Date): boolean {
     const m = SR_COMMENT_RE.exec(line);
     if (!m) return false;
     const schedules = parseScheduleComment(m[0]);
     for (const s of schedules) {
-        if (s === null) {
-            // this side is "new" per dummy date, so treat as not due but not truly new either
-            continue;
-        }
-        if (s.dueDate.valueOf() <= todayMidnight) return true;
+        // a null side is "new" per the dummy date: not due, but not truly new either
+        if (s === null) continue;
+        if (isFaceDue(s, now)) return true;
     }
     return false;
 }
@@ -134,7 +140,7 @@ function processFile(
     file: FileLines,
     normalisedRoots: string[],
     roots: Map<string, DeckNode>,
-    todayMidnight: number,
+    now: Date,
 ): void {
     let activeDeckTag: string | null = null;
     let activeRoot: string | null = null;
@@ -171,7 +177,7 @@ function processFile(
 
         if (lineIsNew(srBearingLine)) {
             node.stats.new++;
-        } else if (lineIsDue(srBearingLine, todayMidnight)) {
+        } else if (lineIsDue(srBearingLine, now)) {
             node.stats.due++;
         }
     }
@@ -200,7 +206,9 @@ export function buildDeckTree(
 ): Map<string, DeckNode> {
     const { rootTags, today } = options;
     const normRoots = rootTags.map(normalise);
-    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate()).valueOf();
+    // Floored to midnight, as before: deck counts are a whole-day summary, and a
+    // card due today must count as due from the moment the day starts.
+    const todayMidnight = startOfDay(today);
 
     const roots = new Map<string, DeckNode>();
     for (const rt of normRoots) {

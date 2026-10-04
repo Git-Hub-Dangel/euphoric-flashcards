@@ -144,6 +144,11 @@ describe("buildDeckTree — nested deck tree", () => {
 // Card classification: new vs due vs scheduled-not-due
 // ---------------------------------------------------------------------------
 
+// FSRS segments: !<due>,<stability>,<difficulty>,<reps>,<lapses>,<state>,<last_review>
+function sr(due: string): string {
+    return `<!--SR:!${due},4,5,2,0,2,2023-09-01-->`;
+}
+
 describe("buildDeckTree — card status", () => {
     it("card with no SR comment is new", () => {
         const tree = build(
@@ -156,24 +161,98 @@ describe("buildDeckTree — card status", () => {
 
     it("card with SR comment due on today is due", () => {
         // TODAY is 2023-09-06; a due date of 2023-09-06 should be due
-        const line = "word - translation <!--SR:!2023-09-06,4,250-->";
-        const tree = build([{ path: "f.md", lines: ["#vocab", line] }], ["#vocab"]);
+        const tree = build(
+            [{ path: "f.md", lines: ["#vocab", `word - translation ${sr("2023-09-06")}`] }],
+            ["#vocab"],
+        );
         expect(tree.get("#vocab")!.stats.due).toBe(1);
         expect(tree.get("#vocab")!.stats.new).toBe(0);
     });
 
     it("card with SR comment due in the past is due", () => {
-        const line = "word - translation <!--SR:!2023-09-01,4,250-->";
-        const tree = build([{ path: "f.md", lines: ["#vocab", line] }], ["#vocab"]);
+        const tree = build(
+            [{ path: "f.md", lines: ["#vocab", `word - translation ${sr("2023-09-01")}`] }],
+            ["#vocab"],
+        );
         expect(tree.get("#vocab")!.stats.due).toBe(1);
     });
 
     it("card with SR comment due in the future is not due and not new", () => {
-        const line = "word - translation <!--SR:!2099-01-01,4,250-->";
-        const tree = build([{ path: "f.md", lines: ["#vocab", line] }], ["#vocab"]);
+        const tree = build(
+            [{ path: "f.md", lines: ["#vocab", `word - translation ${sr("2099-01-01")}`] }],
+            ["#vocab"],
+        );
         expect(tree.get("#vocab")!.stats.due).toBe(0);
         expect(tree.get("#vocab")!.stats.new).toBe(0);
         expect(tree.get("#vocab")!.stats.total).toBe(1);
+    });
+
+    it("counts a card due on the bare SR line that follows it", () => {
+        const tree = build(
+            [{ path: "f.md", lines: ["#vocab", "word - translation", sr("2023-09-01")] }],
+            ["#vocab"],
+        );
+        expect(tree.get("#vocab")!.stats.total).toBe(1);
+        expect(tree.get("#vocab")!.stats.due).toBe(1);
+    });
+
+    it("counts a card due on only its back face", () => {
+        const line = `word - translation <!--SR:!2000-01-01,0,0,0,0,0,!2023-09-01,4,5,2,0,2,2023-08-28-->`;
+        const tree = build([{ path: "f.md", lines: ["#vocab", line] }], ["#vocab"]);
+        expect(tree.get("#vocab")!.stats.due).toBe(1);
+        // A card with one dummy face is neither wholly new nor uncounted.
+        expect(tree.get("#vocab")!.stats.new).toBe(0);
+        expect(tree.get("#vocab")!.stats.total).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// §C3 regression: deck-tree delegates parsing to comment-parser, so a change to
+// the segment layout can make every card silently vanish from Due and New while
+// Total stays correct — no error, no type failure, just a deck that looks empty.
+// These assert the coupling directly rather than trusting it.
+// ---------------------------------------------------------------------------
+
+describe("buildDeckTree — due/new counts track the SR segment layout", () => {
+    it("reads the due date from field 0 of the segment", () => {
+        // Past date in field 0 → due. If the due date ever stops being field 0,
+        // this is the test that fails instead of the counts quietly zeroing.
+        const due = build(
+            [{ path: "f.md", lines: ["#vocab", `w - t ${sr("2023-09-01")}`] }],
+            ["#vocab"],
+        );
+        expect(due.get("#vocab")!.stats.due).toBe(1);
+
+        // Same segment, future date in field 0 → not due. Only field 0 moved.
+        const notDue = build(
+            [{ path: "f.md", lines: ["#vocab", `w - t ${sr("2099-01-01")}`] }],
+            ["#vocab"],
+        );
+        expect(notDue.get("#vocab")!.stats.due).toBe(0);
+    });
+
+    it("a card the parser cannot read counts as neither due nor new, but still counts", () => {
+        // The pre-FSRS three-field shape. The FSRS-only parser rejects it, which
+        // is correct — and is exactly the state Phase 5's converter exists to
+        // resolve. Total must still see the card, so it cannot go missing.
+        const legacy = "word - translation <!--SR:!2023-09-01,4,250-->";
+        const tree = build([{ path: "f.md", lines: ["#vocab", legacy] }], ["#vocab"]);
+        expect(tree.get("#vocab")!.stats.total).toBe(1);
+        expect(tree.get("#vocab")!.stats.due).toBe(0);
+        expect(tree.get("#vocab")!.stats.new).toBe(0);
+    });
+
+    it("keeps Total intact even when every card is unreadable", () => {
+        const tree = build([{
+            path: "f.md",
+            lines: [
+                "#vocab",
+                "a - b <!--SR:!2023-09-01,4,250-->",
+                "c - d <!--SR:!2023-09-02,4,250-->",
+                "e - f <!--SR:!2023-09-03,4,250-->",
+            ],
+        }], ["#vocab"]);
+        expect(tree.get("#vocab")!.stats.total).toBe(3);
     });
 });
 

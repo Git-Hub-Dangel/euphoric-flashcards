@@ -1,10 +1,13 @@
 import type { Vault } from "obsidian";
-import type { Moment } from "moment";
 
 import { DueDateHistogram } from "src/scheduling/due-date-histogram";
 import { parseScheduleComment } from "src/persistence/comment-parser";
-import { DUMMY_DUE_DATE_FOR_NEW_CARD, PREFERRED_DATE_FORMAT } from "src/scheduling/constants";
-import { DateUtil } from "src/scheduling/dates";
+import {
+    DUMMY_DUE_DATE_FOR_NEW_CARD,
+    PREFERRED_DATE_FORMAT,
+    TICKS_PER_DAY,
+} from "src/scheduling/constants";
+import { formatDate, parseLegacyDate, startOfDay } from "src/scheduling/dates";
 
 const SR_COMMENT_RE = /<!--SR:!.+?-->/g;
 
@@ -44,13 +47,15 @@ export class HistogramStore {
     }
 
     // snapshot into the algorithm's expected shape (days-from-today → count).
-    toRelativeHistogram(today: Moment): DueDateHistogram {
+    // Keys are written by formatDate, but parsed leniently: a hand-edited
+    // data.json is the one place a legacy date shape can still turn up.
+    toRelativeHistogram(today: Date): DueDateHistogram {
         const h = new DueDateHistogram();
-        const todayStart = today.clone().startOf("day");
+        const todayStart = startOfDay(today).valueOf();
         for (const [iso, count] of Object.entries(this.state.data)) {
-            const d = DateUtil.dateStrToMoment(iso);
-            if (!d.isValid()) continue;
-            const days = d.startOf("day").diff(todayStart, "days");
+            const d = parseLegacyDate(iso);
+            if (d === null) continue;
+            const days = Math.round((d.valueOf() - todayStart) / TICKS_PER_DAY);
             h.set(days, count);
         }
         return h;
@@ -69,7 +74,7 @@ export class HistogramStore {
                 const schedules = parseScheduleComment(m[0]);
                 for (const s of schedules) {
                     if (s === null) continue;
-                    const iso = s.dueDate.format(PREFERRED_DATE_FORMAT);
+                    const iso = formatDate(s.due.valueOf(), PREFERRED_DATE_FORMAT);
                     if (iso === DUMMY_DUE_DATE_FOR_NEW_CARD) continue;
                     fresh[iso] = (fresh[iso] ?? 0) + 1;
                 }
