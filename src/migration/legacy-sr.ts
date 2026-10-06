@@ -104,9 +104,12 @@ export function parseLegacySegment(segment: string): LegacySegment | null {
 // it describes a card the engine would refuse to schedule. An interval of 0
 // previously seeded stability 0, which made next_state throw Invalid memory
 // state on the first review of that face and left the session with no response
-// buttons. At S_MIN retrievability is still effectively 0, so the urgency the
-// old comment wanted is preserved. parseLegacySegment also reports 0 for an
-// unreadable interval field, so this covers damage as well as lapses.
+// buttons. S_MIN is the lowest retention the engine will model (retrievability
+// lands near 0.35 after a day and near 0.14 after a year, against 0.99 and 0.57
+// for a card at stability 10), so a seeded face still sorts as among the most
+// urgent in the deck, which is the ranking §B5 asked for. parseLegacySegment
+// also reports 0 for an unreadable interval field, so this covers damage as well
+// as lapses.
 //
 // reps and lapses are lost rather than guessed, since SM-2 never recorded them.
 // This is the one documented data loss in the conversion.
