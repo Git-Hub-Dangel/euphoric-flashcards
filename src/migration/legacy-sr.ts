@@ -1,7 +1,7 @@
 import { buildScheduleComment } from "src/persistence/comment-parser";
 import { DUMMY_DUE_DATE_FOR_NEW_CARD, PREFERRED_DATE_FORMAT, TICKS_PER_DAY } from "src/scheduling/constants";
 import { formatDate, parseLegacyDate } from "src/scheduling/dates";
-import { State } from "src/scheduling/fsrs";
+import { S_MIN, State } from "src/scheduling/fsrs";
 import type { ScheduleInfo } from "src/scheduling/fsrs";
 import { computeDeckRegions } from "src/decks/tag-scope";
 
@@ -94,14 +94,22 @@ export function parseLegacySegment(segment: string): LegacySegment | null {
 
 // Seed an FSRS face from a legacy one (plan §B5).
 //
-// stability = interval, with **no floor**. A card sitting at interval 1 migrates
-// as genuinely low-retention, and a lapsed card at interval 0 migrates with
-// stability 0, which FSRS reads as retrievability 0 and therefore maximum
-// urgency. Both are intended. Inflating stability to make a converted deck look
-// healthier would be a lie the user then has to review their way out of.
+// stability = interval, floored at S_MIN. A card sitting at interval 1 migrates
+// as genuinely low retention, which is intended. Stability is never inflated to
+// make a converted deck look healthier than it is, because the user would then
+// have to review their way out of the lie.
 //
-// reps and lapses are **lost**, not guessed: SM-2 never recorded them. This is
-// the one documented data loss in the conversion.
+// S_MIN is a floor and not an inflation. It is the bottom of the range ts-fsrs
+// accepts, and the engine clamps its own output to it, so a seeded value under
+// it describes a card the engine would refuse to schedule. An interval of 0
+// previously seeded stability 0, which made next_state throw Invalid memory
+// state on the first review of that face and left the session with no response
+// buttons. At S_MIN retrievability is still effectively 0, so the urgency the
+// old comment wanted is preserved. parseLegacySegment also reports 0 for an
+// unreadable interval field, so this covers damage as well as lapses.
+//
+// reps and lapses are lost rather than guessed, since SM-2 never recorded them.
+// This is the one documented data loss in the conversion.
 export function seedFromLegacy(legacy: LegacySegment): ScheduleInfo {
     // Whole days, because invariant 40 requires both stored dates to be calendar
     // dates. The interval itself may be fractional and keeps its precision in
@@ -109,7 +117,7 @@ export function seedFromLegacy(legacy: LegacySegment): ScheduleInfo {
     const wholeDays = Math.round(legacy.interval);
     return {
         due: legacy.due,
-        stability: legacy.interval,
+        stability: Math.max(S_MIN, legacy.interval),
         difficulty: difficultyFromEase(legacy.ease),
         reps: 0,
         lapses: 0,

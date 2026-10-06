@@ -258,8 +258,14 @@ export class LearnModal extends Modal {
             this.revealed = true;
             answerEl.removeClass("ef-hidden");
             staggerIn(answerEl, 0);
+            // Built before Show Answer is taken away, and restored on a failure.
+            // See the note on ReviewModal.doReveal for what removing it first
+            // used to cost.
+            if (!this.tryRenderFaceActions(item, face.schedule, isPostAgain)) {
+                this.revealed = false;
+                return;
+            }
             showBtn.remove();
-            this.renderFaceActions(item, face.schedule, isPostAgain);
         };
         showBtn.addEventListener("click", doReveal);
         this.addKey(" ", doReveal);
@@ -272,6 +278,29 @@ export class LearnModal extends Modal {
     // Review. The reduced surface is cosmetic. B2 still holds, so neither drill
     // button writes, and a third grade there would imply a choice the scheduler
     // never sees. Keys follow the buttons, so 3 is unbound on the re-drill.
+    // Builds the response row, reporting whether it succeeded. Mirrors
+    // ReviewModal.tryRenderResponseButtons, including why a partial row's key
+    // handlers are safe to leave registered.
+    private tryRenderFaceActions(
+        item: LearnItem,
+        schedule: ScheduleInfo | null,
+        isPostAgain: boolean,
+    ): boolean {
+        try {
+            this.renderFaceActions(item, schedule, isPostAgain);
+            return true;
+        } catch (e) {
+            console.error("EuphoricFlashcards LearnModal reveal:", e);
+            if (this.footerEl) {
+                for (const el of Array.from(this.footerEl.querySelectorAll(".ef-btn-response"))) {
+                    el.remove();
+                }
+            }
+            new Notice("Could not prepare the answer buttons for this card. Its saved schedule may be damaged.");
+            return false;
+        }
+    }
+
     private renderFaceActions(
         item: LearnItem,
         schedule: ScheduleInfo | null,

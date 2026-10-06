@@ -255,14 +255,45 @@ export class ReviewModal extends Modal {
             answerEl.removeClass("ef-hidden");
             // Animate only the newly revealed content — the prompt stays put.
             staggerIn(answerEl, 0);
+            // The response buttons are built before Show Answer is taken away,
+            // and a failure puts the surface back. Removing it first meant any
+            // throw in here (the scheduler rejecting a stored memory state, for
+            // one) left an empty action row with keys 1 to 3 unregistered, and
+            // the only way out of the session was closing the modal.
+            if (!this.tryRenderResponseButtons(actions, item, face.schedule)) {
+                this.revealed = false;
+                return;
+            }
             showBtn.remove();
-            this.renderResponseButtons(actions, item, face.schedule);
         };
         showBtn.addEventListener("click", doReveal);
         this.addKey(" ", doReveal);
         this.addKey("Enter", doReveal);
 
         this.firstRender = false;
+    }
+
+    // Builds the response row, reporting whether it succeeded. On a failure any
+    // partial row is cleared so the caller can restore Show Answer and the user
+    // can retry or leave through the edit pencil or the back arrow. Stale key
+    // handlers from a partial row are harmless, since every response handler
+    // returns early while `revealed` is false.
+    private tryRenderResponseButtons(
+        actionsEl: HTMLElement,
+        item: ReviewItem,
+        schedule: ScheduleInfo | null,
+    ): boolean {
+        try {
+            this.renderResponseButtons(actionsEl, item, schedule);
+            return true;
+        } catch (e) {
+            console.error("EuphoricFlashcards ReviewModal reveal:", e);
+            for (const el of Array.from(actionsEl.querySelectorAll(".ef-btn-response"))) {
+                el.remove();
+            }
+            new Notice("Could not prepare the answer buttons for this card. Its saved schedule may be damaged.");
+            return false;
+        }
     }
 
     private renderResponseButtons(

@@ -4,6 +4,8 @@ import {
     generatorParameters,
     Rating,
     State,
+    S_MIN,
+    S_MAX,
     default_w,
 } from "ts-fsrs";
 import type { Card, FSRS, FSRSParameters, Grade } from "ts-fsrs";
@@ -22,6 +24,18 @@ import { ReviewResponse } from "src/scheduling/review-response";
 // boundary.
 export { Rating, State };
 export type { Card, Grade };
+
+// The lowest stability ts-fsrs will accept, re-exported so the converter can
+// seed inside the engine's domain without importing ts-fsrs itself. The engine
+// clamps its own output to this value, so repeated lapsing asymptotes here and
+// never goes under. A stored value below it can only come from a conversion or
+// from a hand edited comment.
+export { S_MIN, S_MAX };
+
+// FSRS difficulty runs 1 (easiest) to 10 (hardest). Outside that range
+// next_state rejects the card.
+export const DIFFICULTY_MIN = 1;
+export const DIFFICULTY_MAX = 10;
 
 // Rating.Manual (0) is not a grade. These four are, in ascending quality.
 export const FSRS_GRADES = [Rating.Again, Rating.Hard, Rating.Good, Rating.Easy] as const;
@@ -187,13 +201,41 @@ export function scheduledDays(s: ScheduleInfo): number {
     return Math.max(0, diffInDays(s.last_review, s.due));
 }
 
+// A stored memory state, brought back inside the domain ts-fsrs accepts.
+//
+// `next_state` throws `Invalid memory state` when difficulty is under 1 or
+// stability is under S_MIN, and that throw lands in the middle of rendering the
+// response buttons, which leaves a review session with no buttons and no keys.
+// The one exception is a stability and a difficulty that are both exactly zero,
+// which is how ts-fsrs spells an uninitialised card and which it answers by
+// seeding from the grade instead. That case is passed through untouched, so this
+// only rewrites states that would otherwise throw.
+//
+// Reachable through the Phase 5 converter, which seeded stability from the SM-2
+// interval and so wrote zero for a lapsed card, and through the comment parser,
+// whose numeric fields fall back to zero when a field is unreadable. Clamping on
+// the way in repairs a vault that already holds such a comment, with no
+// migration. It mirrors the defensive clamp on the parameters above.
+function clampMemoryState(s: ScheduleInfo): { stability: number; difficulty: number } {
+    if (s.stability === 0 && s.difficulty === 0) {
+        return { stability: 0, difficulty: 0 };
+    }
+    // clamp() also absorbs a NaN, which a stored field can be and which would
+    // otherwise slip past a bare comparison and corrupt every later interval.
+    return {
+        stability: clamp(s.stability, S_MIN, S_MAX),
+        difficulty: clamp(s.difficulty, DIFFICULTY_MIN, DIFFICULTY_MAX),
+    };
+}
+
 // ScheduleInfo → the shape ts-fsrs wants, with the two derived fields restored.
 export function toCard(s: ScheduleInfo, now: Date): Card {
     const lastReview = s.last_review;
+    const memory = clampMemoryState(s);
     return {
         due: s.due,
-        stability: s.stability,
-        difficulty: s.difficulty,
+        stability: memory.stability,
+        difficulty: memory.difficulty,
         elapsed_days: lastReview === null ? 0 : Math.max(0, diffInDays(lastReview, now)),
         scheduled_days: scheduledDays(s),
         learning_steps: 0,

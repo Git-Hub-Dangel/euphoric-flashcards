@@ -9,7 +9,8 @@ import {
     seedFromLegacy,
 } from "src/migration/legacy-sr";
 import { parseScheduleComment } from "src/persistence/comment-parser";
-import { State } from "src/scheduling/fsrs";
+import { FsrsEngine, S_MIN, State, toCard } from "src/scheduling/fsrs";
+import { DEFAULT_SETTINGS } from "src/settings";
 import { TICKS_PER_DAY } from "src/scheduling/constants";
 
 // The two legacy shapes the converter has to read (plan §B5).
@@ -133,10 +134,73 @@ describe("seedFromLegacy", () => {
         expect(s.last_review!.getMinutes()).toBe(0);
     });
 
-    // Plan §B5, stated outright: a lapsed card migrates as low-retention and is
-    // not quietly inflated to look healthier than it is.
-    it("migrates an interval-zero card with stability zero", () => {
-        expect(seedFromLegacy(parseLegacySegment("2026-09-26,0,130")!).stability).toBe(0);
+    // Plan §B5 wanted a lapsed card to migrate as low retention rather than be
+    // quietly inflated. It seeded stability 0 to say so, and that is outside the
+    // range ts-fsrs accepts, so the first review of such a face threw Invalid
+    // memory state and left the session with no response buttons. S_MIN is the
+    // bottom of the engine's range, so it keeps the intent (retrievability is
+    // still effectively 0) without producing a card the engine refuses.
+    it("floors an interval-zero card at S_MIN rather than seeding stability zero", () => {
+        const s = seedFromLegacy(parseLegacySegment("2026-09-26,0,130")!);
+        expect(s.stability).toBe(S_MIN);
+        expect(s.difficulty).toBeGreaterThanOrEqual(1);
+    });
+
+    it("floors an unreadable interval field the same way", () => {
+        // parseLegacySegment reports 0 for a field it cannot read, so damage
+        // lands in the same place a genuine lapse does.
+        const s = seedFromLegacy(parseLegacySegment("2026-09-26,junk,249")!);
+        expect(s.stability).toBe(S_MIN);
+    });
+
+    it("never seeds a state the engine would reject", () => {
+        for (const interval of ["0", "0.0001", "0.5", "1", "junk", ""]) {
+            for (const ease of ["0", "130", "250", "350", "9999", "junk"]) {
+                const parsed = parseLegacySegment(`2026-09-26,${interval},${ease}`);
+                if (parsed === null) continue;
+                const s = seedFromLegacy(parsed);
+                expect(s.stability, `interval ${interval}`).toBeGreaterThanOrEqual(S_MIN);
+                expect(s.difficulty, `ease ${ease}`).toBeGreaterThanOrEqual(1);
+                expect(s.difficulty, `ease ${ease}`).toBeLessThanOrEqual(10);
+            }
+        }
+    });
+});
+
+// The crash this fix exists for, end to end through production code. A legacy
+// card at interval 0 used to convert into a face that threw the moment its
+// answer was revealed, which bricked the Review and Learn session it appeared
+// in. Both halves are pinned, since either one alone would close the hole and
+// the other would then rot unnoticed.
+describe("a converted interval-zero card is reviewable", () => {
+    const AT = new Date("2026-10-06T10:00:00");
+    const LEGACY_LAPSED_FRONT = "<!--SR:!2026-10-05,0,250!2026-11-01,30,250-->";
+
+    it("survives convert then parse then previewAll", () => {
+        const result = convertComment(LEGACY_LAPSED_FRONT);
+        expect(result.status).toBe("converted");
+
+        const schedules = parseScheduleComment(result.comment!);
+        const front = schedules[0];
+        const back = schedules[1];
+        expect(front).not.toBeNull();
+        expect(back).not.toBeNull();
+
+        const e = new FsrsEngine(DEFAULT_SETTINGS);
+        expect(() => e.previewAll(toCard(front!, AT), AT)).not.toThrow();
+        expect(() => e.previewAll(toCard(back!, AT), AT)).not.toThrow();
+    });
+
+    // The read side alone repairs a vault converted before the floor landed, so
+    // it has to hold even for a comment that still carries stability 0.
+    it("reviews a comment already on disk with stability zero", () => {
+        const onDisk = "<!--SR:!2026-10-05,0,5.0909,0,0,2,2026-10-05-->";
+        const front = parseScheduleComment(onDisk)[0];
+        expect(front).not.toBeNull();
+        expect(front!.stability).toBe(0);
+
+        const e = new FsrsEngine(DEFAULT_SETTINGS);
+        expect(() => e.previewAll(toCard(front!, AT), AT)).not.toThrow();
     });
 });
 

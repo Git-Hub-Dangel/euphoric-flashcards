@@ -13,6 +13,8 @@ import {
     ratingFor,
     scheduledDays,
     State,
+    S_MAX,
+    S_MIN,
     toCard,
     toScheduleInfo,
 } from "src/scheduling/fsrs";
@@ -658,5 +660,100 @@ describe("a late review is credited for the extra elapsed time", () => {
         expect(delayed.stability).not.toBe(punctual.stability);
         expect(delayed.scheduled_days).toBeGreaterThanOrEqual(1);
         expect(punctual.scheduled_days).toBeGreaterThanOrEqual(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// The memory state domain (the Invalid memory state crash)
+// ---------------------------------------------------------------------------
+//
+// ts-fsrs rejects a card whose difficulty is under 1 or whose stability is under
+// S_MIN, unless both are exactly 0. The throw used to surface in the middle of
+// rendering the response buttons, which left Review and Learn with an empty
+// action row and no way to answer. toCard clamps the state back into range.
+describe("memory state clamping", () => {
+    const AT = new Date("2026-01-15T10:00:00Z");
+
+    function stored(stability: number, difficulty: number): ScheduleInfo {
+        return {
+            due: new Date("2026-01-16T10:00:00Z"),
+            stability,
+            difficulty,
+            reps: 3,
+            lapses: 1,
+            state: State.Review,
+            last_review: new Date("2026-01-10T10:00:00Z"),
+        };
+    }
+
+    it("pins S_MIN and S_MAX, so a ts-fsrs bump that moves them is visible", () => {
+        expect(S_MIN).toBe(0.001);
+        expect(S_MAX).toBe(36500);
+    });
+
+    it("floors a stability of zero, which is what the converter seeded", () => {
+        const card = toCard(stored(0, 5.0909), AT);
+        expect(card.stability).toBe(S_MIN);
+        expect(card.difficulty).toBe(5.0909);
+    });
+
+    it("floors a stability between zero and S_MIN", () => {
+        expect(toCard(stored(0.0005, 5), AT).stability).toBe(S_MIN);
+    });
+
+    it("leaves a stability of exactly S_MIN alone", () => {
+        expect(toCard(stored(S_MIN, 5), AT).stability).toBe(S_MIN);
+    });
+
+    it("clamps difficulty into the one to ten range", () => {
+        expect(toCard(stored(5, 0), AT).difficulty).toBe(1);
+        expect(toCard(stored(5, 0.5), AT).difficulty).toBe(1);
+        expect(toCard(stored(5, 42), AT).difficulty).toBe(10);
+    });
+
+    it("absorbs a NaN in either field", () => {
+        const card = toCard(stored(NaN, NaN), AT);
+        expect(card.stability).toBe(S_MIN);
+        expect(card.difficulty).toBe(1);
+    });
+
+    // Both fields exactly zero is how ts-fsrs spells an uninitialised card, and
+    // it answers that by seeding from the grade. Passing it through untouched is
+    // what makes the clamp rewrite only states that would otherwise throw.
+    it("passes a wholly uninitialised state through untouched", () => {
+        const card = toCard(stored(0, 0), AT);
+        expect(card.stability).toBe(0);
+        expect(card.difficulty).toBe(0);
+    });
+
+    it("does not throw for any state the clamp admits", () => {
+        const e = engine();
+        const cases: [number, number][] = [
+            [0, 5.0909], [0, 1], [0, 10], [0.0005, 5], [S_MIN, 5],
+            [5, 0], [5, 0.5], [5, 42], [NaN, NaN], [0, 0], [10, 5],
+        ];
+        for (const [stability, difficulty] of cases) {
+            expect(
+                () => e.previewAll(toCard(stored(stability, difficulty), AT), AT),
+                `stability ${stability} difficulty ${difficulty}`,
+            ).not.toThrow();
+        }
+    });
+
+    // The floor is real and it is S_MIN. Repeated lapsing asymptotes there
+    // rather than decaying to zero, so the engine's own writes can never land in
+    // the rejected range. Only a conversion or a hand edit can.
+    it("asymptotes at S_MIN under sustained lapsing rather than reaching zero", () => {
+        const e = engine();
+        let at = new Date("2026-01-15T10:00:00Z");
+        let card = emptyCard(at);
+        let min = Infinity;
+        for (let i = 0; i < 60; i++) {
+            card = e.schedule(card, Rating.Again, at);
+            min = Math.min(min, card.stability);
+            at = new Date(card.due.valueOf());
+        }
+        expect(min).toBe(S_MIN);
+        expect(min).toBeGreaterThanOrEqual(S_MIN);
     });
 });

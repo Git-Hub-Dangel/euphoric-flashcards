@@ -405,10 +405,7 @@ export class EuphoricSettingsTab extends PluginSettingTab {
                 ],
             },
 
-            // Migrate and Reset. Last group in the tab. The converter (FSRS plan
-            // P5.3) rewrites notes in place on a single click with no
-            // confirmation, which is why it sits here rather than beside the
-            // sliders.
+            // Migrate flashcards
             {
                 type: "group",
                 heading: "Migrate Flashcards",
