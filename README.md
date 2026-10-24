@@ -4,7 +4,7 @@
 
 A free, offline, and private spaced-repetition flashcard plugin purpose built for effective language learning. Built on autodidactic learning experience to be the daily core of your learning system. Review flashcards and actively solidify them with sentence building practice and a suite of additional features. Initially based off the [OSR](https://github.com/st3v3nmw/obsidian-spaced-repetition) plugin.
 
-**Euphoric Flashcards enriches learning with features such as**
+**Euphoric enriches learning with features such as**
 
 * a flexible, dynamic syntax that captures more than just words
    * word-type categorisation (noun, adjective, verbs, or custom types)
