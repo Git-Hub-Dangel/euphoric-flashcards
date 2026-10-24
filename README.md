@@ -28,6 +28,8 @@ This plugin, instead of solely being a mundane repository for your vocabulary, f
 
 [This Guide](https://www.jrdk.de/projects/euphoric-flashcards) is the official introductory resource. Written for users of all experience-levels it covers everything you need to know (and more) to get started in just about half an hour.
 
+[Obsidian Marketplace](https://community.obsidian.md/plugins/euphoric-flashcards)
+
 ## Acknowledgements
 
 I'd like to warmheartedly thank the contributors and supervisors of the original [Obsidian Spaced Repetition Plugin](https://github.com/st3v3nmw/obsidian-spaced-repetition) for laying the fundament of this idea and continuously developing a project, that I used for almost three years before the thought of a modernised language-centered alternative came to my mind.
